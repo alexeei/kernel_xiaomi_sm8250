@@ -157,7 +157,6 @@ static inline void rcu_init_nohz(void) { }
 	} while (0)
 #define rcu_note_voluntary_context_switch(t) \
 	do { \
-		rcu_all_qs(); \
 		rcu_tasks_qs(t); \
 	} while (0)
 void call_rcu_tasks(struct rcu_head *head, rcu_callback_t func);
