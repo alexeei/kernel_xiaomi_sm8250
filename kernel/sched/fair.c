@@ -3928,7 +3928,9 @@ static inline unsigned long _task_util_est(struct task_struct *p)
 {
 	struct util_est ue = READ_ONCE(p->se.avg.util_est);
 
-	return max(ue.ewma, (ue.enqueued & ~UTIL_AVG_UNCHANGED));
+
+	return (max(ue.ewma, ue.enqueued) | UTIL_AVG_UNCHANGED);
+
 }
 
 unsigned long task_util_est(struct task_struct *p)
@@ -4012,6 +4014,16 @@ static inline void util_est_update(struct cfs_rq *cfs_rq,
 
 	if (!sched_feat(UTIL_EST))
 		return;
+
+
+	/* Update root cfs_rq's estimated utilization */
+	ue.enqueued  = cfs_rq->avg.util_est.enqueued;
+	ue.enqueued -= min_t(unsigned int, ue.enqueued, _task_util_est(p));
+	WRITE_ONCE(cfs_rq->avg.util_est.enqueued, ue.enqueued);
+
+	/* Update plots for CPU's estimated utilization */
+	trace_sched_util_est_cpu(cpu_of(rq_of(cfs_rq)), cfs_rq);
+
 
 	/*
 	 * Skip update of task's estimated utilization when the task has not
@@ -7203,9 +7215,11 @@ static unsigned long cpu_util_without(int cpu, struct task_struct *p)
 		 * properly fix the execl regression and it helps in further
 		 * reducing the chances for the above race.
 		 */
-		if (unlikely(task_on_rq_queued(p) || current == p))
-			lsub_positive(&estimated, _task_util_est(p));
 
+		if (unlikely(task_on_rq_queued(p) || current == p)) {
+			estimated -= min_t(unsigned int, estimated,
+					   _task_util_est(p));
+		}
 		util = max(util, estimated);
 	}
 #endif
