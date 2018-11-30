@@ -220,8 +220,10 @@ srcu_read_lock_notrace(struct srcu_struct *sp) __acquires(sp)
 static inline void srcu_read_unlock(struct srcu_struct *sp, int idx)
 	__releases(sp)
 {
-	rcu_lock_release(&(sp)->dep_map);
-	__srcu_read_unlock(sp, idx);
+
+	WARN_ON_ONCE(idx & ~0x1);
+	rcu_lock_release(&(ssp)->dep_map);
+	__srcu_read_unlock(ssp, idx);
 }
 
 /* Used by tracing, cannot be traced and cannot call lockdep. */
