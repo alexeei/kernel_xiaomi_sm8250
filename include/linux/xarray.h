@@ -530,7 +530,6 @@ int __must_check __xa_alloc(struct xarray *, u32 *id, void *entry,
 		struct xa_limit, gfp_t);
 int __must_check __xa_alloc_cyclic(struct xarray *, u32 *id, void *entry,
 		struct xa_limit, u32 *next, gfp_t);
-int __must_check __xa_reserve(struct xarray *, unsigned long index, gfp_t);
 void __xa_set_mark(struct xarray *, unsigned long index, xa_mark_t);
 void __xa_clear_mark(struct xarray *, unsigned long index, xa_mark_t);
 
@@ -1012,13 +1011,7 @@ static inline int xa_alloc_cyclic_irq(struct xarray *xa, u32 *id, void *entry,
 static inline __must_check
 int xa_reserve(struct xarray *xa, unsigned long index, gfp_t gfp)
 {
-	int ret;
-
-	xa_lock(xa);
-	ret = __xa_reserve(xa, index, gfp);
-	xa_unlock(xa);
-
-	return ret;
+	return xa_err(xa_cmpxchg(xa, index, NULL, XA_ZERO_ENTRY, gfp));
 }
 
 /**
@@ -1036,13 +1029,7 @@ int xa_reserve(struct xarray *xa, unsigned long index, gfp_t gfp)
 static inline __must_check
 int xa_reserve_bh(struct xarray *xa, unsigned long index, gfp_t gfp)
 {
-	int ret;
-
-	xa_lock_bh(xa);
-	ret = __xa_reserve(xa, index, gfp);
-	xa_unlock_bh(xa);
-
-	return ret;
+	return xa_err(xa_cmpxchg_bh(xa, index, NULL, XA_ZERO_ENTRY, gfp));
 }
 
 /**
@@ -1060,13 +1047,7 @@ int xa_reserve_bh(struct xarray *xa, unsigned long index, gfp_t gfp)
 static inline __must_check
 int xa_reserve_irq(struct xarray *xa, unsigned long index, gfp_t gfp)
 {
-	int ret;
-
-	xa_lock_irq(xa);
-	ret = __xa_reserve(xa, index, gfp);
-	xa_unlock_irq(xa);
-
-	return ret;
+	return xa_err(xa_cmpxchg_irq(xa, index, NULL, XA_ZERO_ENTRY, gfp));
 }
 
 
