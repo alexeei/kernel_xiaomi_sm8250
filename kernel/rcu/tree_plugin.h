@@ -258,11 +258,10 @@ static void rcu_preempt_ctxt_queue(struct rcu_node *rnp, struct rcu_data *rdp)
 	 * still in a quiescent state in any case.)
 	 */
 
-	if (blkd_state & RCU_EXP_BLKD && rdp->deferred_qs)
+	if (blkd_state & RCU_EXP_BLKD && rdp->exp_deferred_qs)
 		rcu_report_exp_rdp(rdp);
 	else
-		WARN_ON_ONCE(rdp->deferred_qs);
-
+		WARN_ON_ONCE(rdp->exp_deferred_qs);
 }
 
 /*
@@ -359,7 +358,7 @@ void rcu_note_context_switch(bool preempt)
 	 * means that we continue to block the current grace period.
 	 */
 	rcu_qs();
-	if (rdp->deferred_qs)
+	if (rdp->exp_deferred_qs)
 		rcu_report_exp_rdp(rdp);
 	trace_rcu_utilization(TPS("End context switch"));
 	barrier(); /* Avoid RCU read-side critical sections leaking up. */
@@ -473,7 +472,7 @@ rcu_preempt_deferred_qs_irqrestore(struct task_struct *t, unsigned long flags)
 	 */
 	special = t->rcu_read_unlock_special;
 	rdp = this_cpu_ptr(&rcu_data);
-	if (!special.s && !rdp->deferred_qs) {
+	if (!special.s && !rdp->exp_deferred_qs) {
 		local_irq_restore(flags);
 		return;
 	}
@@ -481,7 +480,7 @@ rcu_preempt_deferred_qs_irqrestore(struct task_struct *t, unsigned long flags)
 	if (special.b.need_qs) {
 		rcu_qs();
 		t->rcu_read_unlock_special.b.need_qs = false;
-		if (!t->rcu_read_unlock_special.s && !rdp->deferred_qs) {
+		if (!t->rcu_read_unlock_special.s && !rdp->exp_deferred_qs) {
 			local_irq_restore(flags);
 			return;
 		}
@@ -494,7 +493,7 @@ rcu_preempt_deferred_qs_irqrestore(struct task_struct *t, unsigned long flags)
 	 * blocked-tasks list below.
 	 */
 
-	if (rdp->deferred_qs) {
+	if (rdp->exp_deferred_qs) {
 		rcu_report_exp_rdp(rdp);
 		if (!t->rcu_read_unlock_special.s) {
 			local_irq_restore(flags);
@@ -583,7 +582,7 @@ rcu_preempt_deferred_qs_irqrestore(struct task_struct *t, unsigned long flags)
  */
 static bool rcu_preempt_need_deferred_qs(struct task_struct *t)
 {
-	return (__this_cpu_read(rcu_data.deferred_qs) ||
+	return (__this_cpu_read(rcu_data.exp_deferred_qs) ||
 		READ_ONCE(t->rcu_read_unlock_special.s)) &&
 	       t->rcu_read_lock_nesting <= 0;
 }
