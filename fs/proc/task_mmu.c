@@ -1432,7 +1432,6 @@ static ssize_t clear_refs_write(struct file *file, const char __user *buf,
 			mmu_notifier_invalidate_range_end(mm, 0, -1);
 			flush_tlb_mm(mm);
 			dec_tlb_flush_pending(mm);
-		}
 		up_read(&mm->mmap_sem);
 out_mm:
 		mmput(mm);
