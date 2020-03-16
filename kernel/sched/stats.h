@@ -126,6 +126,18 @@ static inline void psi_ttwu_dequeue(struct task_struct *p)
 	}
 }
 
+
+static inline void psi_sched_switch(struct task_struct *prev,
+				    struct task_struct *next,
+				    bool sleep)
+{
+	if (static_branch_likely(&psi_disabled))
+		return;
+
+	psi_task_switch(prev, next, sleep);
+}
+
+
 static inline void psi_task_tick(struct rq *rq)
 {
 	if (static_branch_likely(&psi_disabled))
