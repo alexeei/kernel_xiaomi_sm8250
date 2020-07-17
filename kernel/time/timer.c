@@ -508,9 +508,7 @@ static int calc_wheel_index(unsigned long expires, unsigned long clk,
 	unsigned int idx;
 
 	if (delta < LVL_START(1)) {
-
 		idx = calc_index(expires, 0, bucket_expiry);
-
 	} else if (delta < LVL_START(2)) {
 		idx = calc_index(expires, 1, bucket_expiry);
 	} else if (delta < LVL_START(3)) {
