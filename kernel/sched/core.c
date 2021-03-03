@@ -4144,6 +4144,7 @@ void scheduler_tick(void)
 	if (early_notif)
 		cpufreq_update_util(rq, SCHED_CPUFREQ_EARLY_DET);
 #endif
+
 	rq_unlock(rq, &rf);
 
 	perf_event_task_tick();
