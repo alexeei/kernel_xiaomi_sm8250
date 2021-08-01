@@ -177,6 +177,7 @@ unsigned int sysctl_sched_cfs_bandwidth_slice		= 5000UL;
  * (default: ~20%)
  */
 unsigned int capacity_margin				= 1280;
+<<<<<<< HEAD
 unsigned int sched_capacity_margin_up[CPU_NR] = {
 			[0 ... CPU_NR-1] = 1078}; /* ~5% margin */
 unsigned int sched_capacity_margin_down[CPU_NR] = {
@@ -187,6 +188,14 @@ unsigned int sched_capacity_margin_up_boosted[CPU_NR] = {
 unsigned int sched_capacity_margin_down_boosted[CPU_NR] = {
 	3658, 3658, 3658, 3658, 3658, 3658, 3658, 3658
 }; /* not used for small cores, 72% margin for big, 72% margin for big+ */
+=======
+unsigned int sched_capacity_margin_up[NR_CPUS] = {
+			1280, 1280, 1280, 1280, 1625, 1625, 1625, 1024
+}; /* ~20% margin for small, ~37% for big, not used for big+  */
+unsigned int sched_capacity_margin_down[NR_CPUS] = {
+			1024, 1024, 1024, 1024, 1796, 1796, 1796, 1442
+}; /* Not used for small, ~43% margin for big, ~29% for big+ */
+>>>>>>> 5d721fdede6c (sched/fair: Modify capacity margins for sm8250)
 
 #ifdef CONFIG_SCHED_WALT
 /* 1ms default for 20ms window size scaled to 1024 */
