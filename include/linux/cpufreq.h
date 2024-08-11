@@ -321,7 +321,8 @@ struct cpufreq_driver {
 
 	/* optional */
 	int		(*bios_limit)(int cpu, unsigned int *limit);
-
+    int		(*online)(struct cpufreq_policy *policy);
+	int		(*offline)(struct cpufreq_policy *policy);
 	int		(*exit)(struct cpufreq_policy *policy);
 	void		(*stop_cpu)(struct cpufreq_policy *policy);
 	int		(*suspend)(struct cpufreq_policy *policy);
@@ -346,7 +347,7 @@ struct cpufreq_driver {
 						   transitions */
 #define CPUFREQ_PM_NO_WARN	(1 << 2)	/* don't warn on suspend/resume
 						   speed mismatches */
-
+#define CPUFREQ_NEED_UPDATE_LIMITS	(1 << 0)	
 /*
  * This should be set by platforms having multiple clock-domains, i.e.
  * supporting multiple policies. With this sysfs directories of governor would

@@ -525,22 +525,7 @@ static unsigned int __resolve_freq(struct cpufreq_policy *policy,
 unsigned int cpufreq_driver_resolve_freq(struct cpufreq_policy *policy,
 					 unsigned int target_freq)
 {
-	target_freq = clamp_val(target_freq, policy->min, policy->max);
-	policy->cached_target_freq = target_freq;
-
-	if (cpufreq_driver->target_index) {
-		int idx;
-
-		idx = cpufreq_frequency_table_target(policy, target_freq,
-						     CPUFREQ_RELATION_L);
-		policy->cached_resolved_idx = idx;
-		return policy->freq_table[idx].frequency;
-	}
-
-	if (cpufreq_driver->resolve_freq)
-		return cpufreq_driver->resolve_freq(policy, target_freq);
-
-	return target_freq;
+	return __resolve_freq(policy, target_freq, CPUFREQ_RELATION_L);
 }
 EXPORT_SYMBOL_GPL(cpufreq_driver_resolve_freq);
 
@@ -1237,6 +1222,18 @@ static int cpufreq_online(unsigned int cpu)
 		down_write(&policy->rwsem);
 	}
 
+    if (!new_policy && cpufreq_driver->online) {
+		ret = cpufreq_driver->online(policy);
+		if (ret) {
+			pr_debug("%s: %d: initialization failed\n", __func__,
+				 __LINE__);
+			goto out_exit_policy;
+		}
+
+    /* Recover policy->cpus using related_cpus */
+		cpumask_copy(policy->cpus, policy->related_cpus);
+	} else {
+
 	cpumask_copy(policy->cpus, cpumask_of(cpu));
 
 	/* call driver. From then on the cpufreq must be able
@@ -1250,13 +1247,10 @@ static int cpufreq_online(unsigned int cpu)
 
 	ret = cpufreq_table_validate_and_sort(policy);
 	if (ret)
-		goto out_exit_policy;
+		goto out_offline_policy;
 
-	down_write(&policy->rwsem);
-
-	if (new_policy) {
-		/* related_cpus should at least include policy->cpus. */
-		cpumask_copy(policy->related_cpus, policy->cpus);
+    cpumask_copy(policy->related_cpus, policy->cpus);
+    
 	}
 
 	/*
@@ -2003,19 +1997,20 @@ int __cpufreq_driver_target(struct cpufreq_policy *policy,
 			    unsigned int relation)
 {
 	unsigned int old_target_freq = target_freq;
-	int index;
+
 
 	if (cpufreq_disabled())
 		return -ENODEV;
 
 	/* Make sure that target_freq is within supported range */
-	target_freq = clamp_val(target_freq, policy->min, policy->max);
+	target_freq = __resolve_freq(policy, target_freq, relation);
 
 	pr_debug("target for CPU %u: %u kHz, relation %u, requested %u kHz\n",
 		 policy->cpu, target_freq, relation, old_target_freq);
 
-	/* Save last value to restore later on errors */
-	policy->restore_freq = policy->cur;
+	if (target_freq == policy->cur &&
+	    !(cpufreq_driver->flags & CPUFREQ_NEED_UPDATE_LIMITS))
+		return 0;
 
 	if (cpufreq_driver->target)
 		return cpufreq_driver->target(policy, target_freq, relation);
@@ -2023,9 +2018,9 @@ int __cpufreq_driver_target(struct cpufreq_policy *policy,
 	if (!cpufreq_driver->target_index)
 		return -EINVAL;
 
-	index = cpufreq_frequency_table_target(policy, target_freq, relation);
+	
 
-	return __target_index(policy, index);
+	return __target_index(policy, policy->cached_resolved_idx);
 }
 EXPORT_SYMBOL_GPL(__cpufreq_driver_target);
 
