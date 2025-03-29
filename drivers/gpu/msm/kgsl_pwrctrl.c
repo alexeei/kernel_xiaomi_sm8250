@@ -983,6 +983,8 @@ static ssize_t max_gpuclk_store(struct device *dev,
 	unsigned int val = 0;
 	int ret;
 
+    return count;
+
 	ret = kgsl_sysfs_store(buf, &val);
 	if (ret)
 		return ret;
