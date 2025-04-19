@@ -22,9 +22,6 @@ static const struct inode_operations proc_sys_inode_operations;
 static const struct file_operations proc_sys_dir_file_operations;
 static const struct inode_operations proc_sys_dir_operations;
 
-/* shared constants to be used in various sysctls */
-static int sysctl_vals[] = { 0, 1, INT_MAX };
-EXPORT_SYMBOL(sysctl_vals);
 
 /* Support for permanently empty directories */
 
