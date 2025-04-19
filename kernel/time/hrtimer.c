@@ -2025,6 +2025,7 @@ void hrtimer_quiesce_cpu(void *cpup)
 void __init hrtimers_init(void)
 {
 	hrtimers_prepare_cpu(smp_processor_id());
+	
 	open_softirq(HRTIMER_SOFTIRQ, hrtimer_run_softirq);
 }
 
