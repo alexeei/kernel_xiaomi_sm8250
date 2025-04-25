@@ -2885,9 +2885,13 @@ void sock_init_data_uid(struct socket *sock, struct sock *sk, kuid_t uid)
 	sk->sk_ll_usec		=	READ_ONCE(sysctl_net_busy_read);
 #endif
 
+
 	sk->sk_max_pacing_rate = ~0U;
 	sk->sk_pacing_rate = ~0U;
-	sk->sk_pacing_shift = 10;
+
+	
+	WRITE_ONCE(sk->sk_pacing_shift, 10);
+
 	sk->sk_incoming_cpu = -1;
 
 	sk_rx_queue_clear(sk);
