@@ -23,6 +23,9 @@
 
 #include <linux/fs.h>
 #include <linux/namei.h>
+#ifndef KSU_HAS_PATH_UMOUNT
+#include <linux/syscalls.h> // sys_umount (<4.17) & ksys_umount (4.17+)
+#endif
 
 #ifdef MODULE
 #include <linux/list.h>
@@ -111,6 +114,7 @@ static void setup_groups(struct root_profile *profile, struct cred *cred)
 
 	groups_sort(group_info);
 	set_groups(cred, group_info);
+	put_group_info(group_info);
 }
 
 static void disable_seccomp(void)
@@ -135,16 +139,15 @@ void escape_to_root(void)
 {
 	struct cred *cred;
 
-	rcu_read_lock();
-
-	do {
-		cred = (struct cred *)__task_cred((current));
-		BUG_ON(!cred);
-	} while (!get_cred_rcu(cred));
+	cred = prepare_creds();
+	if (!cred) {
+		pr_err("%s: failed to allocate new cred.\n", __func__);
+		return;
+	}
 
 	if (cred->euid.val == 0) {
 		pr_warn("Already root, don't escape!\n");
-		rcu_read_unlock();
+		abort_creds(cred);
 		return;
 	}
 
@@ -177,8 +180,8 @@ void escape_to_root(void)
 	       sizeof(cred->cap_bset));
 
 	setup_groups(profile, cred);
-	
-	rcu_read_unlock();
+
+	commit_creds(cred);
 
 	// Refer to kernel/seccomp.c: seccomp_set_mode_strict
 	// When disabling Seccomp, ensure that current->sighand->siglock is held during the operation.
@@ -228,6 +231,7 @@ int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentry)
 	return 0;
 }
 
+#ifdef CONFIG_EXT4_FS
 static void nuke_ext4_sysfs() {
 	struct path path;
 	int err = kern_path("/data/adb/modules", 0, &path);
@@ -247,6 +251,9 @@ static void nuke_ext4_sysfs() {
 	ext4_unregister_sysfs(sb);
 	path_put(&path);
 }
+#else
+static inline void nuke_ext4_sysfs() { }
+#endif
 
 int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
 		     unsigned long arg4, unsigned long arg5)
@@ -521,17 +528,31 @@ static bool should_umount(struct path *path)
 	return false;
 }
 
-static void ksu_umount_mnt(struct path *path, int flags)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) || defined(KSU_HAS_PATH_UMOUNT)
+static void ksu_path_umount(const char *mnt, struct path *path, int flags)
 {
-	int err = path_umount(path, flags);
-	if (err) {
-		pr_err("umount %s failed, err: %d\n",
-			path->dentry->d_iname, err);
-	} else {
-		pr_info("umount %s success\n",
-			path->dentry->d_iname);
-	}
+	int ret = path_umount(path, flags);
+	pr_info("%s: path: %s ret: %d\n", __func__, mnt, ret);
 }
+#else
+// TODO: Search a way to make this works without set_fs functions
+static void ksu_sys_umount(const char *mnt, int flags)
+{
+	char __user *usermnt = (char __user *)mnt;
+	mm_segment_t old_fs;
+	int ret; // although asmlinkage long
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
+	ret = ksys_umount(usermnt, flags);
+#else
+	ret = sys_umount(usermnt, flags); // cuz asmlinkage long sys##name
+#endif
+	set_fs(old_fs);
+	pr_info("%s: path: %s ret: %d\n", __func__, usermnt, ret);
+}
+#endif
 
 static void try_umount(const char *mnt, bool check_mnt, int flags)
 {
@@ -543,15 +564,21 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
 
 	if (path.dentry != path.mnt->mnt_root) {
 		// it is not root mountpoint, maybe umounted by others already.
+		path_put(&path);
 		return;
 	}
 
 	// we are only interest in some specific mounts
 	if (check_mnt && !should_umount(&path)) {
+		path_put(&path);
 		return;
 	}
 
-	ksu_umount_mnt(&path, flags);
+#ifdef KSU_HAS_PATH_UMOUNT
+	ksu_path_umount(mnt, &path, flags);
+#else
+	ksu_sys_umount(mnt, flags);
+#endif
 }
 
 int ksu_handle_setuid(struct cred *new, const struct cred *old)
@@ -612,7 +639,7 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
 	try_umount("/vendor", true, 0);
 	try_umount("/product", true, 0);
 	try_umount("/system_ext", true, 0);
-	
+
 	// try umount modules path
 	try_umount("/data/adb/modules", false, MNT_DETACH);
 
@@ -661,10 +688,27 @@ static int ksu_task_fix_setuid(struct cred *new, const struct cred *old,
 }
 
 #ifndef MODULE
+#ifndef KSU_HAS_DEVPTS_HANDLER
+extern int ksu_handle_devpts(struct inode *inode);
+static int ksu_inode_permission(struct inode *inode, int mask)
+{
+	if (unlikely(inode->i_sb && inode->i_sb->s_magic == DEVPTS_SUPER_MAGIC)) {
+#ifdef CONFIG_KSU_DEBUG
+		pr_info("%s: devpts inode accessed with mask: %x\n", __func__, mask);
+#endif
+		ksu_handle_devpts(inode);
+	}
+	return 0;
+}
+#endif
+
 static struct security_hook_list ksu_hooks[] = {
 	LSM_HOOK_INIT(task_prctl, ksu_task_prctl),
 	LSM_HOOK_INIT(inode_rename, ksu_inode_rename),
 	LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid),
+#ifndef KSU_HAS_DEVPTS_HANDLER
+	LSM_HOOK_INIT(inode_permission, ksu_inode_permission),
+#endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) ||	\
 	defined(CONFIG_IS_HW_HISI) ||	\
 	defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)

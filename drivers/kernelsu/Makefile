@@ -14,60 +14,28 @@ kernelsu-objs += selinux/rules.o
 ccflags-y += -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include
 ccflags-y += -I$(objtree)/security/selinux -include $(srctree)/include/uapi/asm-generic/errno.h
 
-# Do checks before compile
-ifneq ($(shell grep -q "int path_umount" $(srctree)/fs/namespace.c; echo $$?),0)
-$(error -- Backporting path_umount is mandatory !! Read: https://kernelsu.org/guide/how-to-integrate-for-non-gki.html#how-to-backport-path-umount)
-endif
-
-# https://github.com/tiann/KernelSU/pull/2102/files#diff-3a325663233178293ee38b8161f3be511a466af7e0156b9d03d5aed0497564bfR19
-IS_GKI := $(strip $(shell \
-    if [ "$(VERSION)" -ge "5" -a "$(PATCHLEVEL)" -ge "10" ]; then \
-      echo TRUE; \
-    else \
-      echo FALSE; \
-    fi \
-  ))
-
-ifeq ($(IS_GKI),TRUE)
-$(info -- KernelSU: Kernel version is GKI.)
-# GKI manual hook checks
-# https://github.com/Pzqqt/android_kernel_xiaomi_marble/commit/5b8596b5604bcd0e6e12697a01136a0bb9eb0257
-ifeq ($(strip $(CONFIG_KSU_MANUAL_HOOK)),y)
-$(info -- KernelSU: Hooks with Manual hook!)
-ifeq ($(strip $(CONFIG_KSU)),m)
-$(error CONFIG_KSU_MANUAL_HOOK cannot be enabled when compiling KernelSU as LKM!)
-endif
-else
-ccflags-y += -DKSU_HOOK_WITH_KPROBES
-endif
-endif
-
 obj-$(CONFIG_KSU) += kernelsu.o
 
-# hardcode!
+# .git is a text file while the module is imported by 'git submodule add'.
+
 $(eval KSU_VERSION=12005)
 $(info -- KernelSU version: $(KSU_VERSION))
 ccflags-y += -DKSU_VERSION=$(KSU_VERSION)
 
+# Checks hooks state
+ifeq ($(strip $(CONFIG_KSU_MANUAL_HOOK)),y)
+$(info -- KernelSU: Manually-patched hook.)
+else
+$(info -- KernelSU: Kernel-probe hook.)
+ccflags-y += -DCONFIG_KSU_KPROBES_HOOK
+endif
+
 # SELinux drivers check
-ifeq ($(shell grep -q " current_sid(void)" $(srctree)/security/selinux/include/objsec.h; echo $$?),0)
+ifeq ($(shell grep -q "current_sid(void)" $(srctree)/security/selinux/include/objsec.h; echo $$?),0)
 ccflags-y += -DKSU_COMPAT_HAS_CURRENT_SID
 endif
 ifeq ($(shell grep -q "struct selinux_state " $(srctree)/security/selinux/include/security.h; echo $$?),0)
 ccflags-y += -DKSU_COMPAT_HAS_SELINUX_STATE
-endif
-
-# This feature was introduced in linux 5.0-rc1
-ifeq ($(shell grep -q "get_cred_rcu" $(srctree)/include/linux/cred.h; echo $$?),0)
-ccflags-y += -DKSU_COMPAT_HAS_GET_CRED_RCU
-else
-# https://github.com/gregkh/linux/commit/123e44b9a49a42ff5313ec65256f1540d7c52fa0
-ifeq ($(shell grep -q "atomic_long_t\s\+\usage" $(srctree)/include/linux/cred.h; echo $$?),0)
-$(info -- KernelSU compat: atomic_long_t detected.)
-ccflags-y += -DKSU_COMPAT_ATOMIC_LONG
-else
-$(info -- KernelSU compat: atomic_t detected.)
-endif
 endif
 
 # Handle optional backports
@@ -80,10 +48,32 @@ endif
 ifeq ($(shell grep "ssize_t kernel_write" $(srctree)/fs/read_write.c | grep -q "const void" ; echo $$?),0)
 ccflags-y += -DKSU_OPTIONAL_KERNEL_WRITE
 endif
+ifeq ($(shell grep -q "int\s\+path_umount" $(srctree)/fs/namespace.c; echo $$?),0)
+ccflags-y += -DKSU_HAS_PATH_UMOUNT
+endif
+
+# we have pts_unix98/devpts_get_priv hook compat !!
+KSU_HAS_DEVPTS_INODE := $(shell grep -q "ksu_handle_devpts" $(srctree)/fs/devpts/inode.c; echo $$?)
+KSU_HAS_PTS_UNIX98 := $(shell grep -q "ksu_handle_devpts" $(srctree)/drivers/tty/pty.c; echo $$?)
+
+# Codes:
+# - 0: Both of them exist (impossible)
+# - 1: Neither fs/devpts/inode.c or drivers/tty/pty.c have ksu_handle_devpts
+# - 2: Both of them did not exist
+$(eval KSU_DEVPTS_HANDLER_EXIST=$(shell expr $(KSU_HAS_DEVPTS_INODE) + $(KSU_HAS_PTS_UNIX98)))
+ifeq ($(KSU_DEVPTS_HANDLER_EXIST),1)
+$(info -- KernelSU: Kernel have devpts handler)
+ccflags-y += -DKSU_HAS_DEVPTS_HANDLER
+endif
 
 # Checks Samsung UH drivers
 ifeq ($(shell grep -q "CONFIG_KDP_CRED" $(srctree)/kernel/cred.c; echo $$?),0)
 ccflags-y += -DSAMSUNG_UH_DRIVER_EXIST
+endif
+
+# Samsung SELinux Porting
+ifeq ($(shell grep -q "SEC_SELINUX_PORTING_COMMON" $(srctree)/security/selinux/avc.c; echo $$?),0)
+ccflags-y += -DSAMSUNG_SELINUX_PORTING
 endif
 
 ifndef KSU_EXPECTED_SIZE
