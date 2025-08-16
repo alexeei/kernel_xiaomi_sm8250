@@ -385,37 +385,12 @@ int dwc3_send_gadget_ep_cmd(struct dwc3_ep *dep, unsigned cmd,
 	const struct usb_endpoint_descriptor *desc = dep->endpoint.desc;
 	struct dwc3		*dwc = dep->dwc;
 	u32			timeout = 5000;
-	u32			saved_config = 0;
 	u32			reg;
 
 	int			cmd_status = 0;
 	int			ret = -EINVAL;
 
-	/*
-	 * When operating in USB 2.0 speeds (HS/FS), if GUSB2PHYCFG.ENBLSLPM or
-	 * GUSB2PHYCFG.SUSPHY is set, it must be cleared before issuing an
-	 * endpoint command.
-	 *
-	 * Save and clear both GUSB2PHYCFG.ENBLSLPM and GUSB2PHYCFG.SUSPHY
-	 * settings. Restore them after the command is completed.
-	 *
-	 * DWC_usb3 3.30a and DWC_usb31 1.90a programming guide section 3.2.2
-	 */
-	if (dwc->gadget.speed <= USB_SPEED_HIGH) {
-		reg = dwc3_readl(dwc->regs, DWC3_GUSB2PHYCFG(0));
-		if (unlikely(reg & DWC3_GUSB2PHYCFG_SUSPHY)) {
-			saved_config |= DWC3_GUSB2PHYCFG_SUSPHY;
-			reg &= ~DWC3_GUSB2PHYCFG_SUSPHY;
-		}
-
-		if (reg & DWC3_GUSB2PHYCFG_ENBLSLPM) {
-			saved_config |= DWC3_GUSB2PHYCFG_ENBLSLPM;
-			reg &= ~DWC3_GUSB2PHYCFG_ENBLSLPM;
-		}
-
-		if (saved_config)
-			dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), reg);
-	}
+	
 
 	dwc3_writel(dep->regs, DWC3_DEPCMDPAR0, params->param0);
 	dwc3_writel(dep->regs, DWC3_DEPCMDPAR1, params->param1);
@@ -496,11 +471,7 @@ int dwc3_send_gadget_ep_cmd(struct dwc3_ep *dep, unsigned cmd,
 		dwc3_gadget_ep_get_transfer_index(dep);
 	}
 
-	if (saved_config) {
-		reg = dwc3_readl(dwc->regs, DWC3_GUSB2PHYCFG(0));
-		reg |= saved_config;
-		dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), reg);
-	}
+	
 
 	return ret;
 }
@@ -2279,7 +2250,7 @@ done:
 static int dwc3_gadget_run_stop(struct dwc3 *dwc, int is_on, int suspend)
 {
 	u32			reg, reg1;
-	u32			timeout = 1500;
+	u32			timeout = 500;
 
 	dbg_event(0xFF, "run_stop", is_on);
 	reg = dwc3_readl(dwc->regs, DWC3_DCTL);
