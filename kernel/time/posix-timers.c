@@ -178,6 +178,7 @@ static int posix_timer_add(struct k_itimer *timer)
 		spin_unlock(&hash_lock);
 	} while (ret == -ENOENT);
 	return ret;
+
 }
 
 static inline void unlock_timer(struct k_itimer *timr, unsigned long flags)
