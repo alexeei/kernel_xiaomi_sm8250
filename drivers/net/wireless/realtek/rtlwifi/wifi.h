@@ -2745,6 +2745,7 @@ struct rtl_priv {
 	struct ieee80211_hw *hw;
 	struct completion firmware_loading_complete;
 	struct rtl_priv *buddy_priv;
+	struct rtl_global_var *glb_var;
 	struct rtl_dmsp_ctl dmsp_ctl;
 	struct rtl_locks locks;
 	struct rtl_works works;

@@ -41,6 +41,7 @@
 #include <linux/kthread.h>
 #include <linux/init.h>
 #include <linux/mmu_notifier.h>
+#include <linux/cred.h>
 
 #include <linux/memory_hotplug.h>
 #include <linux/show_mem_notifier.h>

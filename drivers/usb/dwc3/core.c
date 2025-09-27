@@ -142,6 +142,7 @@ void dwc3_en_sleep_mode(struct dwc3 *dwc)
 	if (dwc->dis_enblslpm_quirk)
 		return;
 
+
 	reg = dwc3_readl(dwc->regs, DWC3_GUSB2PHYCFG(0));
 	reg |= DWC3_GUSB2PHYCFG_ENBLSLPM;
 	dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), reg);
@@ -162,6 +163,7 @@ void dwc3_dis_sleep_mode(struct dwc3 *dwc)
 	reg = dwc3_readl(dwc->regs, DWC3_GUCTL1);
 	reg &= ~DWC3_GUCTL1_L1_SUSP_THRLD_EN_FOR_HOST;
 	dwc3_writel(dwc->regs, DWC3_GUCTL1, reg);
+
 }
 
 void dwc3_set_mode(struct dwc3 *dwc, u32 mode)

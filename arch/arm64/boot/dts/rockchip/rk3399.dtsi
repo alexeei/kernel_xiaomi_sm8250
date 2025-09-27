@@ -1032,6 +1032,16 @@
 					 <&cru SCLK_UPHY1_TCPDPHY_REF>;
 				#power-domain-cells = <0>;
 			};
+			pd_tcpc0@RK3399_PD_TCPD0 {
+				reg = <RK3399_PD_TCPD0>;
+				clocks = <&cru SCLK_UPHY0_TCPDCORE>,
+					 <&cru SCLK_UPHY0_TCPDPHY_REF>;
+			};
+			pd_tcpc1@RK3399_PD_TCPD1 {
+				reg = <RK3399_PD_TCPD1>;
+				clocks = <&cru SCLK_UPHY1_TCPDCORE>,
+					 <&cru SCLK_UPHY1_TCPDPHY_REF>;
+			};
 			pd_usb3@RK3399_PD_USB3 {
 				reg = <RK3399_PD_USB3>;
 				clocks = <&cru ACLK_USB3>;
@@ -1067,7 +1077,6 @@
 						 <&cru HCLK_ISP1>;
 					pm_qos = <&qos_isp1_m0>,
 						 <&qos_isp1_m1>;
-					#power-domain-cells = <0>;
 				};
 				pd_vo@RK3399_PD_VO {
 					reg = <RK3399_PD_VO>;

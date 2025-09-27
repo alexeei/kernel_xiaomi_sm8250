@@ -317,6 +317,48 @@ static bool rtl_pci_get_amd_l1_patch(struct ieee80211_hw *hw)
 	return status;
 }
 
+
+static bool rtl_pci_check_buddy_priv(struct ieee80211_hw *hw,
+				     struct rtl_priv **buddy_priv)
+{
+	struct rtl_priv *rtlpriv = rtl_priv(hw);
+	struct rtl_pci_priv *pcipriv = rtl_pcipriv(hw);
+	struct rtl_priv *tpriv = NULL, *iter;
+	struct rtl_pci_priv *tpcipriv = NULL;
+
+	if (!list_empty(&rtlpriv->glb_var->glb_priv_list)) {
+		list_for_each_entry(iter, &rtlpriv->glb_var->glb_priv_list,
+				    list) {
+			tpcipriv = (struct rtl_pci_priv *)iter->priv;
+			rtl_dbg(rtlpriv, COMP_INIT, DBG_LOUD,
+				"pcipriv->ndis_adapter.funcnumber %x\n",
+				pcipriv->ndis_adapter.funcnumber);
+			rtl_dbg(rtlpriv, COMP_INIT, DBG_LOUD,
+				"tpcipriv->ndis_adapter.funcnumber %x\n",
+				tpcipriv->ndis_adapter.funcnumber);
+
+			if (pcipriv->ndis_adapter.busnumber ==
+			    tpcipriv->ndis_adapter.busnumber &&
+			    pcipriv->ndis_adapter.devnumber ==
+			    tpcipriv->ndis_adapter.devnumber &&
+			    pcipriv->ndis_adapter.funcnumber !=
+			    tpcipriv->ndis_adapter.funcnumber) {
+				tpriv = iter;
+				break;
+			}
+		}
+	}
+
+	rtl_dbg(rtlpriv, COMP_INIT, DBG_LOUD,
+		"find_buddy_priv %d\n", tpriv != NULL);
+
+	if (tpriv)
+		*buddy_priv = tpriv;
+
+	return tpriv != NULL;
+}
+
+
 static void rtl_pci_parse_configuration(struct pci_dev *pdev,
 					struct ieee80211_hw *hw)
 {
