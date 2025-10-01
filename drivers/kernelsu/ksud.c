@@ -52,9 +52,9 @@ static const char KERNEL_SU_RC[] =
 
 	"\n";
 
-static void stop_vfs_read_hook();
-static void stop_execve_hook();
-static void stop_input_hook();
+static void stop_vfs_read_hook(void);
+static void stop_execve_hook(void);
+static void stop_input_hook(void);
 
 #ifdef CONFIG_KSU_KPROBES_HOOK
 static struct work_struct stop_vfs_read_work;
@@ -68,7 +68,7 @@ bool ksu_input_hook __read_mostly = true;
 
 u32 ksu_devpts_sid;
 
-void on_post_fs_data(void)
+void ksu_on_post_fs_data(void)
 {
 	static bool done = false;
 	if (done) {
@@ -200,7 +200,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 					first_arg);
 				if (!strcmp(first_arg, "second_stage")) {
 					pr_info("/system/bin/init second_stage executed\n");
-					apply_kernelsu_rules();
+					ksu_apply_kernelsu_rules();
 					init_second_stage_executed = true;
 					ksu_android_ns_fs_check();
 				}
@@ -224,7 +224,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 				pr_info("/init first arg: %s\n", first_arg);
 				if (!strcmp(first_arg, "--second-stage")) {
 					pr_info("/init second_stage executed\n");
-					apply_kernelsu_rules();
+					ksu_apply_kernelsu_rules();
 					init_second_stage_executed = true;
 					ksu_android_ns_fs_check();
 				}
@@ -261,7 +261,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 					    (!strcmp(env_value, "1") ||
 					     !strcmp(env_value, "true"))) {
 						pr_info("/init second_stage executed\n");
-						apply_kernelsu_rules();
+						ksu_apply_kernelsu_rules();
 						init_second_stage_executed =
 							true;
 						ksu_android_ns_fs_check();
@@ -276,7 +276,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 		first_app_process = false;
 		pr_info("exec app_process, /data prepared, second_stage: %d\n",
 			init_second_stage_executed);
-		on_post_fs_data(); // we keep this for old ksud
+		ksu_on_post_fs_data(); // we keep this for old ksud
 		stop_execve_hook();
 	}
 
@@ -612,7 +612,7 @@ int __maybe_unused ksu_handle_compat_execve_ksud(const char __user *filename_use
 
 #endif
 
-static void stop_vfs_read_hook()
+static void stop_vfs_read_hook(void)
 {
 #ifdef CONFIG_KSU_KPROBES_HOOK
 	bool ret = schedule_work(&stop_vfs_read_work);
@@ -623,7 +623,7 @@ static void stop_vfs_read_hook()
 #endif
 }
 
-static void stop_execve_hook()
+static void stop_execve_hook(void)
 {
 #ifdef CONFIG_KSU_KPROBES_HOOK
 	bool ret = schedule_work(&stop_execve_hook_work);
@@ -634,7 +634,7 @@ static void stop_execve_hook()
 #endif
 }
 
-static void stop_input_hook()
+static void stop_input_hook(void)
 {
 #ifdef CONFIG_KSU_KPROBES_HOOK
 	static bool input_hook_stopped = false;
@@ -652,7 +652,7 @@ static void stop_input_hook()
 }
 
 // ksud: module support
-void ksu_ksud_init()
+void ksu_ksud_init(void)
 {
 #ifdef CONFIG_KSU_KPROBES_HOOK
 	int ret;
@@ -672,7 +672,7 @@ void ksu_ksud_init()
 #endif
 }
 
-void ksu_ksud_exit()
+void ksu_ksud_exit(void)
 {
 #ifdef CONFIG_KSU_KPROBES_HOOK
 	unregister_kprobe(&execve_kp);

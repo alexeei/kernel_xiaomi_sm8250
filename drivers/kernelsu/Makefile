@@ -14,19 +14,12 @@ kernelsu-objs += selinux/rules.o
 
 ccflags-y += -I$(srctree)/security/selinux -I$(srctree)/security/selinux/include
 ccflags-y += -I$(objtree)/security/selinux -include $(srctree)/include/uapi/asm-generic/errno.h
-ccflags-y += -include $(srctree)/$(src)/include/ksu_creds.h
 
 obj-$(CONFIG_KSU) += kernelsu.o
-
-# .git is a text file while the module is imported by 'git submodule add'.
-
-$(eval KSU_VERSION=12005)
-$(info -- KernelSU version: $(KSU_VERSION))
-ccflags-y += -DKSU_VERSION=$(KSU_VERSION)
-
+ccflags-y += -DKSU_VERSION=12290
 
 # Checks hooks state
-ifeq ($(strip $(CONFIG_KSU_MANUAL_HOOK)),y)
+ifeq ($(CONFIG_KSU_MANUAL_HOOK), y)
 $(info -- KernelSU: CONFIG_KSU_MANUAL_HOOK)
 else
 $(info -- KernelSU: CONFIG_KSU_KPROBES_HOOK)
@@ -51,16 +44,25 @@ endif
 ifeq ($(shell grep "ssize_t kernel_write" $(srctree)/fs/read_write.c | grep -q "const void" ; echo $$?),0)
 ccflags-y += -DKSU_OPTIONAL_KERNEL_WRITE
 endif
+ifeq ($(shell grep -q "inode_security_struct\s\+\*selinux_inode" $(srctree)/security/selinux/include/objsec.h; echo $$?),0)
+ccflags-y += -DKSU_OPTIONAL_SELINUX_INODE
+endif
 ifeq ($(shell grep -q "int\s\+path_umount" $(srctree)/fs/namespace.c; echo $$?),0)
 ccflags-y += -DKSU_HAS_PATH_UMOUNT
+ifneq ($(shell grep -Eq "^int path_umount" $(srctree)/fs/internal.h; echo $$?),0)
+$(shell sed -i '/^extern void __init mnt_init/a int path_umount(struct path *path, int flags);' $(srctree)/fs/internal.h;)
+$(info -- KernelSU-SusFS: adding 'int path_umount(struct path *path, int flags);' to $(srctree)/fs/internal.h)
+endif
 endif
 
-# Checks Samsung UH drivers
+ifeq ($(shell grep -A1 "^int vfs_getattr" $(srctree)/fs/stat.c | grep -q "query_flags"; echo $$?),0)
+ccflags-y += -DKSU_HAS_NEW_VFS_GETATTR
+endif
+
+# Checks Samsung
 ifeq ($(shell grep -q "CONFIG_KDP_CRED" $(srctree)/kernel/cred.c; echo $$?),0)
 ccflags-y += -DSAMSUNG_UH_DRIVER_EXIST
 endif
-
-# Samsung SELinux Porting
 ifeq ($(shell grep -q "SEC_SELINUX_PORTING_COMMON" $(srctree)/security/selinux/avc.c; echo $$?),0)
 ccflags-y += -DSAMSUNG_SELINUX_PORTING
 endif
@@ -85,4 +87,11 @@ $(info -- Supported KernelSU Manager(s): tiann, rsuntk, 5ec1cff)
 ccflags-y += -Wno-implicit-function-declaration -Wno-strict-prototypes -Wno-int-conversion -Wno-gcc-compat
 ccflags-y += -Wno-declaration-after-statement -Wno-unused-function
 
+## For susfs stuff ##
+ifeq ($(shell test -e $(srctree)/fs/susfs.c; echo $$?),0)
+$(eval SUSFS_VERSION=$(shell cat $(srctree)/include/linux/susfs.h | grep -E '^#define SUSFS_VERSION' | cut -d' ' -f3 | sed 's/"//g'))
+$(info -- KernelSU-SusFS version: $(SUSFS_VERSION))
+else
+$(error -- You have not integrate susfs in your kernel. Read: https://gitlab.com/simonpunk/susfs4ksu)
+endif
 # Keep a new line here!! Because someone may append config

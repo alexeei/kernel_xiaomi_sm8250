@@ -61,7 +61,7 @@ static bool android_context_saved_checked = false;
 static bool android_context_saved_enabled = false;
 static struct ksu_ns_fs_saved android_context_saved;
 
-void ksu_android_ns_fs_check()
+void ksu_android_ns_fs_check(void)
 {
 	if (android_context_saved_checked)
 		return;
@@ -77,6 +77,16 @@ void ksu_android_ns_fs_check()
 		pr_info("android context saved disabled\n");
 	}
 	task_unlock(current);
+}
+
+int ksu_access_ok(const void *addr, unsigned long size) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,0,0)
+    /* For kernels before 5.0.0, pass the type argument to access_ok. */
+    return access_ok(VERIFY_READ, addr, size);
+#else
+    /* For kernels 5.0.0 and later, ignore the type argument. */
+    return access_ok(addr, size);
+#endif
 }
 
 struct file *ksu_filp_open_compat(const char *filename, int flags, umode_t mode)

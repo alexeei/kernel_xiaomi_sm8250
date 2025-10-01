@@ -37,11 +37,11 @@ static struct policydb *get_policydb(void)
 }
 
 static DEFINE_MUTEX(ksu_rules);
-void apply_kernelsu_rules()
+void ksu_apply_kernelsu_rules(void)
 {
 	struct policydb *db;
 
-	if (!getenforce()) {
+	if (!ksu_getenforce()) {
 		pr_info("SELinux permissive or disabled, apply rules!\n");
 	}
 
@@ -142,6 +142,14 @@ void apply_kernelsu_rules()
 	// https://android-review.googlesource.com/c/platform/system/logging/+/3725346
 	ksu_dontaudit(db, "untrusted_app", KERNEL_SU_DOMAIN, "dir", "getattr");
 
+#ifdef CONFIG_KSU_SUSFS
+	// Allow umount in zygote process without installing zygisk
+	ksu_allow(db, "zygote", "labeledfs", "filesystem", "unmount");
+	susfs_set_init_sid();
+	susfs_set_ksu_sid();
+	susfs_set_zygote_sid();
+#endif
+
 	mutex_unlock(&ksu_rules);
 }
 
@@ -210,7 +218,7 @@ static int get_object(char *buf, char __user *user_object, size_t buf_sz,
 }
 
 // reset avc cache table, otherwise the new rules will not take effect if already denied
-static void reset_avc_cache()
+static void reset_avc_cache(void)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0) ||	\
 	!defined(KSU_COMPAT_USE_SELINUX_STATE)
@@ -226,7 +234,7 @@ static void reset_avc_cache()
 	selinux_xfrm_notify_policyload();
 }
 
-int handle_sepolicy(unsigned long arg3, void __user *arg4)
+int ksu_handle_sepolicy(unsigned long arg3, void __user *arg4)
 {
 	struct policydb *db;
 
@@ -234,7 +242,7 @@ int handle_sepolicy(unsigned long arg3, void __user *arg4)
 		return -1;
 	}
 
-	if (!getenforce()) {
+	if (!ksu_getenforce()) {
 		pr_info("SELinux permissive or disabled when handle policy!\n");
 	}
 
