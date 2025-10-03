@@ -54,7 +54,6 @@ $(shell sed -i '/^extern void __init mnt_init/a int path_umount(struct path *pat
 $(info -- KernelSU-SusFS: adding 'int path_umount(struct path *path, int flags);' to $(srctree)/fs/internal.h)
 endif
 endif
-
 ifeq ($(shell grep -A1 "^int vfs_getattr" $(srctree)/fs/stat.c | grep -q "query_flags"; echo $$?),0)
 ccflags-y += -DKSU_HAS_NEW_VFS_GETATTR
 endif
@@ -92,6 +91,6 @@ ifeq ($(shell test -e $(srctree)/fs/susfs.c; echo $$?),0)
 $(eval SUSFS_VERSION=$(shell cat $(srctree)/include/linux/susfs.h | grep -E '^#define SUSFS_VERSION' | cut -d' ' -f3 | sed 's/"//g'))
 $(info -- KernelSU-SusFS version: $(SUSFS_VERSION))
 else
-$(error -- You have not integrate susfs in your kernel. Read: https://gitlab.com/simonpunk/susfs4ksu)
+$(error -- You have not integrated susfs in your kernel yet. Read: https://gitlab.com/simonpunk/susfs4ksu)
 endif
 # Keep a new line here!! Because someone may append config

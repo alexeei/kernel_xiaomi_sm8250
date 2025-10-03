@@ -7,9 +7,11 @@
 #ifdef CONFIG_KSU_SUSFS
 #define KERNEL_INIT_DOMAIN "u:r:init:s0"
 #define KERNEL_ZYGOTE_DOMAIN "u:r:zygote:s0"
+#define KERNEL_KERNEL_DOMAIN "u:r:kernel:s0"
 u32 susfs_ksu_sid = 0;
 u32 susfs_init_sid = 0;
 u32 susfs_zygote_sid = 0;
+u32 susfs_kernel_sid = 0;
 #endif
 
 static int transive_to_domain(const char *domain)
@@ -64,7 +66,7 @@ bool __maybe_unused is_ksu_transition(const struct task_security_struct *old_tse
 }
 #endif
 
-void ksu_setup_selinux(const char *domain)
+void setup_selinux(const char *domain)
 {
 	if (transive_to_domain(domain)) {
 		pr_err("transive domain failed.\n");
@@ -72,12 +74,12 @@ void ksu_setup_selinux(const char *domain)
 	}
 }
 
-void ksu_setenforce(bool enforce)
+void setenforce(bool enforce)
 {
 	__setenforce(enforce);
 }
 
-bool ksu_getenforce(void)
+bool getenforce(void)
 {
 	if (is_selinux_disabled()) {
 		return false;
@@ -99,7 +101,7 @@ static inline u32 current_sid(void)
 }
 #endif
 
-bool ksu_is_ksu_domain(void)
+bool is_ksu_domain(void)
 {
 	char *domain;
 	u32 seclen;
@@ -115,7 +117,7 @@ bool ksu_is_ksu_domain(void)
 	return result;
 }
 
-bool ksu_is_zygote(void *sec)
+bool is_zygote(void *sec)
 {
 	struct task_security_struct *tsec = (struct task_security_struct *)sec;
 	if (!tsec) {
@@ -210,6 +212,11 @@ void susfs_set_init_sid(void)
 
 bool susfs_is_current_init_domain(void) {
 	return unlikely(current_sid() == susfs_init_sid);
+}
+
+void susfs_set_kernel_sid(void)
+{
+	susfs_set_sid(KERNEL_KERNEL_DOMAIN, &susfs_kernel_sid);
 }
 #endif
 
