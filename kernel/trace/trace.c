@@ -2794,7 +2794,6 @@ ftrace_trace_userstack(struct trace_array *tr,
 	trace.skip		= 0;
 	trace.entries		= entry->caller;
 
-	save_stack_trace_user(&trace);
 	if (!call_filter_check_discard(call, entry, buffer, event))
 		__buffer_unlock_commit(buffer, event);
 
