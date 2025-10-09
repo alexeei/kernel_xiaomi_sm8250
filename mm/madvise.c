@@ -19,6 +19,7 @@
 #include <linux/sched/mm.h>
 #include <linux/uio.h>
 #include <linux/ksm.h>
+#include <linux/fadvise.h>
 #include <linux/fs.h>
 #include <linux/file.h>
 #include <linux/blkdev.h>
@@ -51,6 +52,7 @@ static int madvise_need_mmap_write(int behavior)
 	case MADV_WILLNEED:
 	case MADV_DONTNEED:
 	case MADV_COLD:
+    case MADV_PAGEOUT:
 	case MADV_FREE:
 		return 0;
 	default:
@@ -257,6 +259,7 @@ static long madvise_willneed(struct vm_area_struct *vma,
 {
 	struct mm_struct *mm = vma->vm_mm;
 	struct file *file = vma->vm_file;
+    loff_t offset;
 
 	*prev = vma;
 #ifdef CONFIG_SWAP
@@ -955,6 +958,8 @@ static int madvise_inject_error(int behavior,
 }
 #endif
 
+
+
 static long
 madvise_vma(struct vm_area_struct *vma, struct vm_area_struct **prev,
 		unsigned long start, unsigned long end, int behavior)
@@ -966,6 +971,8 @@ madvise_vma(struct vm_area_struct *vma, struct vm_area_struct **prev,
 		return madvise_willneed(vma, prev, start, end);
 	case MADV_COLD:
 		return madvise_cold(vma, prev, start, end);
+    case MADV_PAGEOUT:
+		return madvise_pageout(vma, prev, start, end);
 	case MADV_FREE:
 	case MADV_DONTNEED:
 		return madvise_dontneed_free(vma, prev, start, end, behavior);
@@ -988,6 +995,7 @@ madvise_behavior_valid(int behavior)
 	case MADV_DONTNEED:
 	case MADV_FREE:
 	case MADV_COLD:
+    case MADV_PAGEOUT:
 #ifdef CONFIG_KSM
 	case MADV_MERGEABLE:
 	case MADV_UNMERGEABLE:
