@@ -1,3 +1,6 @@
+#include <linux/rcupdate.h>
+#include <linux/slab.h>
+#include <linux/task_work.h>
 #include <asm/current.h>
 #include <linux/compat.h>
 #include <linux/cred.h>
@@ -14,20 +17,29 @@
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 1, 0)
 #include <linux/aio.h>
 #endif
-#include <linux/kprobes.h>
 #include <linux/printk.h>
 #include <linux/types.h>
 #include <linux/uaccess.h>
-#include <linux/workqueue.h>
+#include <linux/namei.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+#include <linux/sched/signal.h>
+#else
+#include <linux/sched.h>
+#endif
 
+#include "manager.h"
 #include "allowlist.h"
 #include "arch.h"
+#include "kernel_compat.h"
 #include "klog.h" // IWYU pragma: keep
 #include "ksud.h"
-#include "kernel_compat.h"
 #include "selinux/selinux.h"
+#include "throne_tracker.h"
+#include "sucompat.h"
 
-bool ksu_is_compat __read_mostly = false; // let it here
+bool ksu_module_mounted __read_mostly = false;
+bool ksu_boot_completed __read_mostly = false;
+bool already_post_fs_data __read_mostly = false;
 
 static const char KERNEL_SU_RC[] =
 	"\n"
@@ -35,19 +47,21 @@ static const char KERNEL_SU_RC[] =
 	"on post-fs-data\n"
 	"    start logd\n"
 	// We should wait for the post-fs-data finish
-	"    exec u:r:su:s0 root -- " KSUD_PATH " post-fs-data\n"
+	"    exec u:r:" KERNEL_SU_DOMAIN ":s0 root -- " KSUD_PATH
+	" post-fs-data\n"
 	"\n"
 
 	"on nonencrypted\n"
-	"    exec u:r:su:s0 root -- " KSUD_PATH " services\n"
+	"    exec u:r:" KERNEL_SU_DOMAIN ":s0 root -- " KSUD_PATH " services\n"
 	"\n"
 
 	"on property:vold.decrypt=trigger_restart_framework\n"
-	"    exec u:r:su:s0 root -- " KSUD_PATH " services\n"
+	"    exec u:r:" KERNEL_SU_DOMAIN ":s0 root -- " KSUD_PATH " services\n"
 	"\n"
 
 	"on property:sys.boot_completed=1\n"
-	"    exec u:r:su:s0 root -- " KSUD_PATH " boot-completed\n"
+	"    exec u:r:" KERNEL_SU_DOMAIN ":s0 root -- " KSUD_PATH
+	" boot-completed\n"
 	"\n"
 
 	"\n";
@@ -56,51 +70,64 @@ static void stop_vfs_read_hook(void);
 static void stop_execve_hook(void);
 static void stop_input_hook(void);
 
-#ifdef CONFIG_KSU_KPROBES_HOOK
-static struct work_struct stop_vfs_read_work;
-static struct work_struct stop_execve_hook_work;
-static struct work_struct stop_input_hook_work;
-#else
 bool ksu_vfs_read_hook __read_mostly = true;
 bool ksu_execveat_hook __read_mostly = true;
 bool ksu_input_hook __read_mostly = true;
-#endif
 
-#ifdef CONFIG_KSU_SUSFS_SUS_SU
-bool susfs_is_sus_su_ready = false;
-#endif // #ifdef CONFIG_KSU_SUSFS_SUS_SU
-
-u32 ksu_devpts_sid;
-
+u32 ksu_file_sid;
 void on_post_fs_data(void)
 {
-	static bool done = false;
-	if (done) {
-		pr_info("%s already done\n", __func__);
+	if (already_post_fs_data) {
+		pr_info("on_post_fs_data already done\n");
 		return;
 	}
-	done = true;
-	pr_info("%s!\n", __func__);
+	already_post_fs_data = true;
+	pr_info("on_post_fs_data!\n");
 	ksu_load_allow_list();
-	// sanity check, this may influence the performance
 	stop_input_hook();
 
-	ksu_devpts_sid = ksu_get_devpts_sid();
-	pr_info("devpts sid: %d\n", ksu_devpts_sid);
+	ksu_file_sid = ksu_get_ksu_file_sid();
+	if (ksu_file_sid != 0) {
+		pr_info("got ksu_file context sid: %d\n", ksu_file_sid);
+	}
+}
+
+extern void ext4_unregister_sysfs(struct super_block *sb);
+int nuke_ext4_sysfs(const char *mnt)
+{
+	struct path path;
+	int err = kern_path(mnt, 0, &path);
+	if (err) {
+		pr_err("nuke path err: %d\n", err);
+		return err;
+	}
+
+	struct super_block *sb = path.dentry->d_inode->i_sb;
+	const char *name = sb->s_type->name;
+	if (strcmp(name, "ext4") != 0) {
+		pr_info("nuke but module aren't mounted\n");
+		path_put(&path);
+		return -EINVAL;
+	}
+
+	ext4_unregister_sysfs(sb);
+	path_put(&path);
+	return 0;
+}
+
+void on_module_mounted(void)
+{
+	pr_info("on_module_mounted!\n");
+	ksu_module_mounted = true;
+}
+
+void on_boot_completed(void)
+{
+	ksu_boot_completed = true;
+	pr_info("on_boot_completed!\n");
 }
 
 #define MAX_ARG_STRINGS 0x7FFFFFFF
-struct user_arg_ptr {
-#ifdef CONFIG_COMPAT
-	bool is_compat;
-#endif
-	union {
-		const char __user *const __user *native;
-#ifdef CONFIG_COMPAT
-		const compat_uptr_t __user *compat;
-#endif
-	} ptr;
-};
 
 static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
 {
@@ -113,7 +140,6 @@ static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
 		if (get_user(compat, argv.ptr.compat + nr))
 			return ERR_PTR(-EFAULT);
 
-		ksu_is_compat = true;
 		return compat_ptr(compat);
 	}
 #endif
@@ -153,10 +179,26 @@ static int __maybe_unused count(struct user_arg_ptr argv, int max)
 
 			if (fatal_signal_pending(current))
 				return -ERESTARTNOHAND;
+
 			cond_resched();
 		}
 	}
 	return i;
+}
+
+static void on_post_fs_data_cbfun(struct callback_head *cb)
+{
+	on_post_fs_data();
+}
+
+static struct callback_head on_post_fs_data_cb = {
+	.func = on_post_fs_data_cbfun
+};
+
+static inline void handle_second_stage(void)
+{
+	apply_kernelsu_rules();
+	setup_ksu_cred();
 }
 
 // IMPORTANT NOTE: the call from execve_handler_pre WON'T provided correct value for envp and flags in GKI version
@@ -164,11 +206,10 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 			     struct user_arg_ptr *argv,
 			     struct user_arg_ptr *envp, int *flags)
 {
-#ifndef CONFIG_KSU_KPROBES_HOOK
 	if (!ksu_execveat_hook) {
 		return 0;
 	}
-#endif
+
 	struct filename *filename;
 
 	static const char app_process[] = "/system/bin/app_process";
@@ -188,6 +229,10 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 		return 0;
 	}
 
+	if (!ksu_handle_execveat_init(filename)) {
+		return 1;
+	}
+
 	if (unlikely(!memcmp(filename->name, system_bin_init,
 			     sizeof(system_bin_init) - 1) &&
 		     argv)) {
@@ -198,15 +243,14 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 			const char __user *p = get_user_arg_ptr(*argv, 1);
 			if (p && !IS_ERR(p)) {
 				char first_arg[16];
-				ksu_strncpy_from_user_retry(
+				ksu_strncpy_from_user_nofault(
 					first_arg, p, sizeof(first_arg));
 				pr_info("/system/bin/init first arg: %s\n",
 					first_arg);
 				if (!strcmp(first_arg, "second_stage")) {
 					pr_info("/system/bin/init second_stage executed\n");
-					apply_kernelsu_rules();
+					handle_second_stage();
 					init_second_stage_executed = true;
-					ksu_android_ns_fs_check();
 				}
 			} else {
 				pr_err("/system/bin/init parse args err!\n");
@@ -223,14 +267,13 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 			const char __user *p = get_user_arg_ptr(*argv, 1);
 			if (p && !IS_ERR(p)) {
 				char first_arg[16];
-				ksu_strncpy_from_user_retry(
+				ksu_strncpy_from_user_nofault(
 					first_arg, p, sizeof(first_arg));
 				pr_info("/init first arg: %s\n", first_arg);
 				if (!strcmp(first_arg, "--second-stage")) {
 					pr_info("/init second_stage executed\n");
-					apply_kernelsu_rules();
+					handle_second_stage();
 					init_second_stage_executed = true;
-					ksu_android_ns_fs_check();
 				}
 			} else {
 				pr_err("/init parse args err!\n");
@@ -248,7 +291,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 					}
 					char env[256];
 					// Reading environment variable strings from user space
-					if (ksu_strncpy_from_user_retry(
+					if (ksu_strncpy_from_user_nofault(
 						    env, p, sizeof(env)) < 0)
 						continue;
 					// Parsing environment variable names and values
@@ -265,10 +308,9 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 					    (!strcmp(env_value, "1") ||
 					     !strcmp(env_value, "true"))) {
 						pr_info("/init second_stage executed\n");
-						apply_kernelsu_rules();
+						handle_second_stage();
 						init_second_stage_executed =
 							true;
-						ksu_android_ns_fs_check();
 					}
 				}
 			}
@@ -280,7 +322,14 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 		first_app_process = false;
 		pr_info("exec app_process, /data prepared, second_stage: %d\n",
 			init_second_stage_executed);
-		on_post_fs_data(); // we keep this for old ksud
+		struct task_struct *init_task;
+		rcu_read_lock();
+		init_task = rcu_dereference(current->real_parent);
+		if (init_task) {
+			task_work_add(init_task, &on_post_fs_data_cb,
+				      TWA_RESUME);
+		}
+		rcu_read_unlock();
 		stop_execve_hook();
 	}
 
@@ -320,11 +369,10 @@ static ssize_t read_iter_proxy(struct kiocb *iocb, struct iov_iter *to)
 int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr,
 			size_t *count_ptr, loff_t **pos)
 {
-#ifndef CONFIG_KSU_KPROBES_HOOK
 	if (!ksu_vfs_read_hook) {
 		return 0;
 	}
-#endif
+
 	struct file *file;
 	char __user *buf;
 	size_t count;
@@ -433,11 +481,10 @@ static bool is_volumedown_enough(unsigned int count)
 int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code,
 				  int *value)
 {
-#ifndef CONFIG_KSU_KPROBES_HOOK
 	if (!ksu_input_hook) {
 		return 0;
 	}
-#endif
+
 	if (*type == EV_KEY && *code == KEY_VOLUMEDOWN) {
 		int val = *value;
 		pr_info("KEY_VOLUMEDOWN val: %d\n", val);
@@ -453,18 +500,24 @@ int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code,
 	return 0;
 }
 
-bool ksu_is_safe_mode()
+bool ksu_is_safe_mode(void)
 {
+	if (already_post_fs_data) {
+		// stop checking if its already on-post-fs-data
+		return false;
+	}
+
 	static bool safe_mode = false;
 	if (safe_mode) {
 		// don't need to check again, userspace may call multiple times
 		return true;
 	}
 
-	// stop hook first!
+	// just in case
 	stop_input_hook();
 
 	pr_info("volumedown_pressed_count: %d\n", volumedown_pressed_count);
+
 	if (is_volumedown_enough(volumedown_pressed_count)) {
 		// pressed over 3 times
 		pr_info("KEY_VOLUMEDOWN pressed max times, safe mode detected!\n");
@@ -475,108 +528,13 @@ bool ksu_is_safe_mode()
 	return false;
 }
 
-#ifdef CONFIG_KSU_KPROBES_HOOK
-
-// https://elixir.bootlin.com/linux/v5.10.158/source/fs/exec.c#L1864
-static int execve_handler_pre(struct kprobe *p, struct pt_regs *regs)
-{
-	int *fd = (int *)&PT_REGS_PARM1(regs);
-	struct filename **filename_ptr =
-		(struct filename **)&PT_REGS_PARM2(regs);
-	struct user_arg_ptr argv;
-#ifdef CONFIG_COMPAT
-	argv.is_compat = PT_REGS_PARM3(regs);
-	if (unlikely(argv.is_compat)) {
-		argv.ptr.compat = PT_REGS_CCALL_PARM4(regs);
-	} else {
-		argv.ptr.native = PT_REGS_CCALL_PARM4(regs);
-	}
-#else
-	argv.ptr.native = PT_REGS_PARM3(regs);
-#endif
-
-	return ksu_handle_execveat_ksud(fd, filename_ptr, &argv, NULL, NULL);
-}
-
-static int sys_execve_handler_pre(struct kprobe *p, struct pt_regs *regs)
-{
-	struct pt_regs *real_regs = PT_REAL_REGS(regs);
-	const char __user **filename_user =
-		(const char **)&PT_REGS_PARM1(real_regs);
-	const char __user *const __user *__argv =
-		(const char __user *const __user *)PT_REGS_PARM2(real_regs);
-	struct user_arg_ptr argv = { .ptr.native = __argv };
-	struct filename filename_in, *filename_p;
-	char path[32];
-
-	if (!filename_user)
-		return 0;
-
-	memset(path, 0, sizeof(path));
-	ksu_strncpy_from_user_nofault(path, *filename_user, 32);
-	filename_in.name = path;
-
-	filename_p = &filename_in;
-	return ksu_handle_execveat_ksud(AT_FDCWD, &filename_p, &argv, NULL,
-					NULL);
-}
-
-static int sys_read_handler_pre(struct kprobe *p, struct pt_regs *regs)
-{
-	struct pt_regs *real_regs = PT_REAL_REGS(regs);
-	unsigned int fd = PT_REGS_PARM1(real_regs);
-	char __user **buf_ptr = (char __user **)&PT_REGS_PARM2(real_regs);
-	size_t count_ptr = (size_t *)&PT_REGS_PARM3(real_regs);
-
-	return ksu_handle_sys_read(fd, buf_ptr, count_ptr);
-}
-
-static int input_handle_event_handler_pre(struct kprobe *p,
-					  struct pt_regs *regs)
-{
-	unsigned int *type = (unsigned int *)&PT_REGS_PARM2(regs);
-	unsigned int *code = (unsigned int *)&PT_REGS_PARM3(regs);
-	int *value = (int *)&PT_REGS_CCALL_PARM4(regs);
-	return ksu_handle_input_handle_event(type, code, value);
-}
-
-static struct kprobe execve_kp = {
-	.symbol_name = SYS_EXECVE_SYMBOL,
-	.pre_handler = sys_execve_handler_pre,
-};
-
-static struct kprobe vfs_read_kp = {
-	.symbol_name = SYS_READ_SYMBOL,
-	.pre_handler = sys_read_handler_pre,
-};
-
-static struct kprobe input_event_kp = {
-	.symbol_name = "input_event",
-	.pre_handler = input_handle_event_handler_pre,
-};
-
-static void do_stop_vfs_read_hook(struct work_struct *work)
-{
-	unregister_kprobe(&vfs_read_kp);
-}
-
-static void do_stop_execve_hook(struct work_struct *work)
-{
-	unregister_kprobe(&execve_kp);
-}
-
-static void do_stop_input_hook(struct work_struct *work)
-{
-	unregister_kprobe(&input_event_kp);
-}
-#else
 static int ksu_execve_ksud_common(const char __user *filename_user,
-			struct user_arg_ptr *argv)
+				  struct user_arg_ptr *argv)
 {
 	struct filename filename_in, *filename_p;
 	char path[32];
 	long len;
-	
+
 	// return early if disabled.
 	if (!ksu_execveat_hook) {
 		return 0;
@@ -595,97 +553,53 @@ static int ksu_execve_ksud_common(const char __user *filename_user,
 	filename_in.name = path;
 	filename_p = &filename_in;
 
-	return ksu_handle_execveat_ksud(AT_FDCWD, &filename_p, argv, NULL, NULL);
+	return ksu_handle_execveat_ksud(AT_FDCWD, &filename_p, argv, NULL,
+					NULL);
 }
 
-int __maybe_unused ksu_handle_execve_ksud(const char __user *filename_user,
-			const char __user *const __user *__argv)
+int __maybe_unused
+ksu_handle_execve_ksud(const char __user *filename_user,
+		       const char __user *const __user *__argv)
 {
 	struct user_arg_ptr argv = { .ptr.native = __argv };
 	return ksu_execve_ksud_common(filename_user, &argv);
 }
 
 #if defined(CONFIG_COMPAT) && defined(CONFIG_64BIT)
-int __maybe_unused ksu_handle_compat_execve_ksud(const char __user *filename_user,
-			const compat_uptr_t __user *__argv)
+int __maybe_unused ksu_handle_compat_execve_ksud(
+	const char __user *filename_user, const compat_uptr_t __user *__argv)
 {
 	struct user_arg_ptr argv = { .ptr.compat = __argv };
 	return ksu_execve_ksud_common(filename_user, &argv);
 }
 #endif /* COMPAT & 64BIT */
 
-#endif
-
 static void stop_vfs_read_hook(void)
 {
-#ifdef CONFIG_KSU_KPROBES_HOOK
-	bool ret = schedule_work(&stop_vfs_read_work);
-	pr_info("unregister vfs_read kprobe: %d!\n", ret);
-#else
 	ksu_vfs_read_hook = false;
 	pr_info("stop vfs_read_hook\n");
-#endif
 }
 
 static void stop_execve_hook(void)
 {
-#ifdef CONFIG_KSU_KPROBES_HOOK
-	bool ret = schedule_work(&stop_execve_hook_work);
-	pr_info("unregister execve kprobe: %d!\n", ret);
-#else
 	ksu_execveat_hook = false;
 	pr_info("stop execve_hook\n");
-#endif
-#ifdef CONFIG_KSU_SUSFS_SUS_SU
-	susfs_is_sus_su_ready = true;
-	pr_info("susfs: sus_su is ready\n");
-#endif
 }
 
 static void stop_input_hook(void)
 {
-#ifdef CONFIG_KSU_KPROBES_HOOK
-	static bool input_hook_stopped = false;
-	if (input_hook_stopped) {
+	if (!ksu_input_hook) {
 		return;
 	}
-	input_hook_stopped = true;
-	bool ret = schedule_work(&stop_input_hook_work);
-	pr_info("unregister input kprobe: %d!\n", ret);
-#else
-	if (!ksu_input_hook) { return; }
 	ksu_input_hook = false;
 	pr_info("stop input_hook\n");
-#endif
 }
 
 // ksud: module support
 void ksu_ksud_init(void)
 {
-#ifdef CONFIG_KSU_KPROBES_HOOK
-	int ret;
-
-	ret = register_kprobe(&execve_kp);
-	pr_info("ksud: execve_kp: %d\n", ret);
-
-	ret = register_kprobe(&vfs_read_kp);
-	pr_info("ksud: vfs_read_kp: %d\n", ret);
-
-	ret = register_kprobe(&input_event_kp);
-	pr_info("ksud: input_event_kp: %d\n", ret);
-
-	INIT_WORK(&stop_vfs_read_work, do_stop_vfs_read_hook);
-	INIT_WORK(&stop_execve_hook_work, do_stop_execve_hook);
-	INIT_WORK(&stop_input_hook_work, do_stop_input_hook);
-#endif
 }
 
 void ksu_ksud_exit(void)
 {
-#ifdef CONFIG_KSU_KPROBES_HOOK
-	unregister_kprobe(&execve_kp);
-	// this should be done before unregister vfs_read_kp
-	// unregister_kprobe(&vfs_read_kp);
-	unregister_kprobe(&input_event_kp);
-#endif
 }
