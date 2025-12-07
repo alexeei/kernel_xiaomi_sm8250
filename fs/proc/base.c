@@ -102,6 +102,10 @@
 #include "internal.h"
 #include "fd.h"
 
+#ifdef CONFIG_KSU_SUSFS_SUS_MAP
+#include <linux/susfs_def.h>
+#endif
+
 #include "../../lib/kstrtox.h"
 
 /* NOTE:
