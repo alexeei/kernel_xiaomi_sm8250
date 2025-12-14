@@ -47,7 +47,7 @@ config CFQ_GROUP_IOSCHED
 choice
 
 	prompt "Default I/O scheduler"
-	default DEFAULT_CFQ
+	default DEFAULT_MAPLE
 	help
 	  Select the I/O scheduler which will be used by default for all
 	  block devices.
@@ -60,7 +60,6 @@ choice
 
 	config DEFAULT_NOOP
 		bool "No-op"
-
 
 	config DEFAULT_SIO
 		bool "SIO" if IOSCHED_SIO=y
