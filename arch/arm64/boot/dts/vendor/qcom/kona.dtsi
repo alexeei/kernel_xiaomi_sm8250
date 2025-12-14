@@ -275,6 +275,7 @@
 
 		cpu-map {
 			cluster0 {
+
 				core0 {
 					cpu = <&CPU0>;
 				};
@@ -291,7 +292,7 @@
 					cpu = <&CPU3>;
 				};
 
-			    core 4{
+			    core4 {
 					cpu = <&CPU4>;
 				};
 
@@ -301,10 +302,9 @@
 
 				core6 {
 					cpu = <&CPU6>;
-				};
-			
+				};		
 
-			    core 7;
+			    core7 {
 					cpu = <&CPU7>;
 				};
 			};
