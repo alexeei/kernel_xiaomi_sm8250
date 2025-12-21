@@ -245,7 +245,6 @@ struct dsi_panel {
 	u32 fod_dim_lut_count;
 #ifdef CONFIG_DRM_SDE_EXPO
 	bool dimlayer_exposure;
-    int fd;
 #endif
 };
 
