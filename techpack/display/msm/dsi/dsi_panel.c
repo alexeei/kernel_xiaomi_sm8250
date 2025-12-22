@@ -912,10 +912,30 @@ int dsi_panel_set_fod_hbm(struct dsi_panel *panel, bool status)
 {
 	int rc = 0;
 
+#ifdef CONFIG_DRM_SDE_EXPO
+ 		if (panel->dimlayer_exposure == 1) {
+         panel->fd = 1;
+ 		}
+ #endif
+
 	if (status) {
+
+#ifdef CONFIG_DRM_SDE_EXPO
+ 		if (panel->fd == 1) {
+ 		panel->dimlayer_exposure = 0;	
+ 		}
+ #endif   
+
 		dsi_panel_set_disp_param(panel, DISPPARAM_HBM_FOD_ON);
 	} else {
 		dsi_panel_set_disp_param(panel, DISPPARAM_HBM_FOD_OFF);
+
+#ifdef CONFIG_DRM_SDE_EXPO
+ 		if (panel->fd == 1) {
+ 		panel->dimlayer_exposure = 1;	
+ 		}
+ #endif
+
 	}
 
 	return rc;
