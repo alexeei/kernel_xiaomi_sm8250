@@ -21,6 +21,7 @@
 #include "msm_gem.h"
 #include "msm_kms.h"
 #include "sde_trace.h"
+#include "xiaomi_frame_stat.h"
 
 #define MULTIPLE_CONN_DETECTED(x) (x > 1)
 

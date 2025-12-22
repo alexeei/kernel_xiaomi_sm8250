@@ -43,6 +43,7 @@ msm_drm-$(CONFIG_DRM_MSM_SDE) += sde/sde_crtc.o \
 	sde/sde_hw_color_proc_v4.o \
 	sde/sde_hw_ad4.o \
 	sde/sde_hw_uidle.o \
+    xiaomi_frame_stat.o \
 	sde_edid_parser.o \
 	sde_hdcp_1x.o \
 	sde_hdcp_2x.o \
@@ -106,6 +107,8 @@ msm_drm-$(CONFIG_DRM_MSM_DSI) += dsi/dsi_phy.o \
 	dsi/dsi_display_mi.o \
 	dsi/dsi_panel_mi.o \
 	dsi/mi_disp_lhbm.o \
+
+
 
 msm_drm-$(CONFIG_DSI_PARSER) += dsi/dsi_parser.o \
 
