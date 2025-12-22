@@ -150,7 +150,6 @@ enum msm_mdp_crtc_property {
 	CRTC_PROP_OUTPUT_FENCE,
 	CRTC_PROP_OUTPUT_FENCE_OFFSET,
 	CRTC_PROP_DIM_LAYER_V1,
-    CRTC_PROP_DIM_LAYER_DC,
 	CRTC_PROP_CORE_CLK,
 	CRTC_PROP_CORE_AB,
 	CRTC_PROP_CORE_IB,
@@ -716,7 +715,6 @@ struct msm_drm_private {
 	bool shutdown_in_progress;
 
 	struct msm_idle idle;
-    ktime_t  complete_commit_time;
 };
 
 /* get struct msm_kms * from drm_device * */

@@ -43,7 +43,6 @@
 #include "dsi_display.h"
 #include "dsi_panel_mi.h"
 #include "dsi_drm.h"
-#include "xiaomi_frame_stat.h"
 
 #define SDE_DEBUG_ENC(e, fmt, ...) SDE_DEBUG("enc%d " fmt,\
 		(e) ? (e)->base.base.id : -1, ##__VA_ARGS__)

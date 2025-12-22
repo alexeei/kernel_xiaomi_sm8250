@@ -11,7 +11,6 @@
 #include "sde_formats.h"
 #include "dsi_display.h"
 #include "sde_trace.h"
-#include "xiaomi_frame_stat.h"
 
 #define SDE_DEBUG_VIDENC(e, fmt, ...) SDE_DEBUG("enc%d intf%d " fmt, \
 		(e) && (e)->base.parent ? \
