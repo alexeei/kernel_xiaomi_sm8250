@@ -556,7 +556,7 @@
 		"gTcpDelAckThresholdHigh", \
 		0, \
 		16000, \
-		500, \
+		300, \
 		CFG_VALUE_OR_DEFAULT, \
 		"High Threshold inorder to trigger TCP Del Ack")
 
@@ -566,7 +566,7 @@
  *                                          indication
  * @Min: 0
  * @Max: 10000
- * @Default: 1000
+ * @Default: 500
  *
  * This ini is used to mention the Low Threshold inorder to trigger TCP Del Ack
  * indication i.e the threshold of packets received over a period of 100 ms.
@@ -585,7 +585,7 @@
 		"gTcpDelAckThresholdLow", \
 		0, \
 		10000, \
-		1000, \
+		500, \
 		CFG_VALUE_OR_DEFAULT, \
 		"Low Threshold inorder to trigger TCP Del Ack")
 
@@ -595,7 +595,7 @@
  *                                      indication
  * @Min: 1
  * @Max: 1000
- * @Default: 30
+ * @Default: 20
  *
  * This ini is used to mention the Del Ack Timer Count inorder to
  * trigger TCP Del Ack indication i.e number of 100 ms periods
@@ -613,7 +613,7 @@
 		"gTcpDelAckTimerCount", \
 		1, \
 		1000, \
-		30, \
+		20, \
 		CFG_VALUE_OR_DEFAULT, \
 		"Del Ack Timer Count inorder to trigger TCP Del Ack")
 
