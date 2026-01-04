@@ -981,6 +981,15 @@ CONFIG_STRIP_ASM_SYMS=y
 CONFIG_CC_IS_CLANG=y
 CONFIG_LD_IS_LLD=y
 
+<<<<<<< HEAD
+=======
+# Userspace CNTVCT_EL0 access
+CONFIG_ARM_ARCH_TIMER_VCT_ACCESS=y
+
+# SUSPEND SKIP SYNC
+CONFIG_SUSPEND_SKIP_SYNC=y
+
+>>>>>>> c83dc92a37d1 (arm64: configs: xiaomi: Enable userspace CNTVCT_EL0 access for vDSO)
 # Thin LTO Support
 CONFIG_THINLTO=y
 CONFIG_LTO_CLANG=y
