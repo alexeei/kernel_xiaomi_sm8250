@@ -113,16 +113,16 @@
 #define CFG_VHT_RX_SUPP_DATA_RATE CFG_UINT( \
 		"rx_supp_data_rate", \
 		0, \
-		866, \
-		866, \
+		1733, \
+		1733, \
 		CFG_VALUE_OR_DEFAULT, \
 		"VHT RX SUPP DATA RATE")
 
 #define CFG_VHT_TX_SUPP_DATA_RATE CFG_UINT( \
 		"tx_supp_data_rate", \
 		0, \
-		866, \
-		866, \
+		1733, \
+		1733, \
 		CFG_VALUE_OR_DEFAULT, \
 		"VHT TX SUPP DATA RATE")
 
@@ -238,7 +238,7 @@
 		"gVhtChannelWidth", \
 		0, \
 		4, \
-		2, \
+		3, \
 		CFG_VALUE_OR_DEFAULT, \
 		"Channel width capability for 11ac")
 
@@ -266,7 +266,7 @@
 		"gVhtRxMCS", \
 		0, \
 		2, \
-		0, \
+		2, \
 		CFG_VALUE_OR_DEFAULT, \
 		"VHT Rx MCS")
 
@@ -294,7 +294,7 @@
 		"gVhtTxMCS", \
 		0, \
 		2, \
-		0, \
+		2, \
 		CFG_VALUE_OR_DEFAULT, \
 		"VHT Tx MCS")
 
@@ -322,7 +322,7 @@
 		"gVhtRxMCS2x2", \
 		0, \
 		2, \
-		0, \
+		2, \
 		CFG_VALUE_OR_DEFAULT, \
 		"VHT Rx MCS 2x2")
 
@@ -350,7 +350,7 @@
 		"gVhtTxMCS2x2", \
 		0, \
 		2, \
-		0, \
+		2, \
 		CFG_VALUE_OR_DEFAULT, \
 		"VHT Tx MCS 2x2")
 
@@ -396,7 +396,7 @@
  */
 #define CFG_VHT_ENABLE_2x2_CAP_FEATURE CFG_INI_BOOL( \
 		"gEnable2x2", \
-		0, \
+		1, \
 		"VHT Enable 2x2")
 
 /*
