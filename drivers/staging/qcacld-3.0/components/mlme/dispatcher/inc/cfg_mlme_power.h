@@ -33,7 +33,8 @@
  * This ini contains the string in the form of first_channel number,
  * number of channels and max tx power triplets
  */
-#define CFG_MAX_TX_POWER_2_4_DATA "1, 14, 20"
+
+#define CFG_MAX_TX_POWER_2_4_DATA "1, 14, 22"
 #define CFG_MAX_TX_POWER_2_4 CFG_STRING( \
 		"max_tx_power_24", \
 		0, \
@@ -51,7 +52,9 @@
  * This ini contains the string in the form of first_channel number,
  * number of channels and max tx power triplets
  */
-#define CFG_MAX_TX_POWER_5_DATA "36, 126, 20"
+
+#define CFG_MAX_TX_POWER_5_DATA "36, 126, 22"
+
 #define CFG_MAX_TX_POWER_5 CFG_STRING( \
 		"max_tx_power_5", \
 		0, \

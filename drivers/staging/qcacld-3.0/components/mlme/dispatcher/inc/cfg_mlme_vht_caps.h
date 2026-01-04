@@ -76,14 +76,14 @@
  */
 #define CFG_VHT_ENABLE_TX_SU_BEAM_FORMER CFG_INI_BOOL( \
 		"gEnableTxSUBeamformer", \
-		0, \
+		1, \
 		"vht tx su beam former")
 
 #define CFG_VHT_NUM_SOUNDING_DIMENSIONS CFG_UINT( \
 		"num_soundingdim", \
 		0, \
 		3, \
-		0, \
+		3, \
 		CFG_VALUE_OR_DEFAULT, \
 		"VHT NUMBER OF SOUNDING DIMENSIONS")
 
@@ -199,7 +199,7 @@
  */
 #define CFG_VHT_ENABLE_TXBF_IN_20MHZ CFG_INI_BOOL( \
 		"gEnableTxBFin20MHz", \
-		0, \
+		1, \
 		"VHT ENABLE TXBF 20MHZ")
 
 #define CFG_VHT_MU_BEAMFORMER_CAP CFG_BOOL( \
