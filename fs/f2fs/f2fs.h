@@ -228,12 +228,13 @@ enum {
 #define CP_RESIZE 	0x00000080
 
 #define DEF_MAX_DISCARD_REQUEST		8	/* issue 8 discards per round */
-#define DEF_MIN_DISCARD_ISSUE_TIME	50	/* 50 ms, if exists */
-#define DEF_MID_DISCARD_ISSUE_TIME	500	/* 500 ms, if device busy */
-#define DEF_MAX_DISCARD_ISSUE_TIME	60000	/* 60 s, if no candidates */
-#define DEF_DISCARD_URGENT_UTIL		80	/* do more discard over 80% */
-#define DEF_CP_INTERVAL			60	/* 60 secs */
-#define DEF_IDLE_INTERVAL		5	/* 5 secs */
+#define DEF_MIN_DISCARD_ISSUE_TIME	100	/* 100 ms, if exists - less aggressive */
+#define DEF_MID_DISCARD_ISSUE_TIME	1000	/* 1s, if device busy */
+#define DEF_MAX_DISCARD_ISSUE_TIME	120000	/* 120s, if no candidates */
+#define DEF_DISCARD_URGENT_UTIL		90	/* do more discard over 90% - higher threshold */
+#define DEF_MAX_DISCARD_URGENT_ISSUE_TIME	20000	/* 20s, if no candidates on high utilization */
+#define DEF_CP_INTERVAL			600	/* 600 secs - less frequent checkpoints */
+#define DEF_IDLE_INTERVAL		30	/* 30 secs - longer idle detection */
 #define DEF_DISABLE_INTERVAL		5	/* 5 secs */
 #define DEF_DISABLE_QUICK_INTERVAL	1	/* 1 secs */
 #define DEF_UMOUNT_DISCARD_TIMEOUT	5	/* 5 secs */
@@ -603,13 +604,13 @@ enum {
 #define F2FS_ONSTACK_PAGES	16	/* nr of onstack pages */
 
 /* for in-memory extent cache entry */
-#define F2FS_MIN_EXTENT_LEN	64	/* minimum extent length */
+#define F2FS_MIN_EXTENT_LEN	16	/* minimum extent length - smaller for better caching */
 
 /* number of extent info in extent cache we try to shrink */
-#define READ_EXTENT_CACHE_SHRINK_NUMBER	128
+#define READ_EXTENT_CACHE_SHRINK_NUMBER	256	/* larger cache */
 
 /* number of age extent info in extent cache we try to shrink */
-#define AGE_EXTENT_CACHE_SHRINK_NUMBER	128
+#define AGE_EXTENT_CACHE_SHRINK_NUMBER	256	/* larger cache */
 #define LAST_AGE_WEIGHT			30
 #define SAME_AGE_REGION			1024
 

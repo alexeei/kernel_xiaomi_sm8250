@@ -10,10 +10,18 @@
 						 * whether IO subsystem is idle
 						 * or not
 						 */
-#define DEF_GC_THREAD_URGENT_SLEEP_TIME	500	/* 500 ms */
-#define DEF_GC_THREAD_MIN_SLEEP_TIME	30000	/* milliseconds */
-#define DEF_GC_THREAD_MAX_SLEEP_TIME	60000
-#define DEF_GC_THREAD_NOGC_SLEEP_TIME	300000	/* wait 5 min */
+
+#define DEF_GC_THREAD_URGENT_SLEEP_TIME	100	/* 100 ms - less aggressive urgent GC */
+#if defined(CONFIG_HZ_1000)
+#define DEF_GC_THREAD_MIN_SLEEP_TIME	50000	/* 50s - more sleep, less GC overhead */
+#define DEF_GC_THREAD_MAX_SLEEP_TIME	120000	/* 120s */
+#define DEF_GC_THREAD_NOGC_SLEEP_TIME	600000	/* 10 min */
+#else
+#define DEF_GC_THREAD_MIN_SLEEP_TIME	50000
+#define DEF_GC_THREAD_MAX_SLEEP_TIME	120000
+#define DEF_GC_THREAD_NOGC_SLEEP_TIME	600000
+#endif
+
 
 /* choose candidates from sections which has age of more than 7 days */
 #define DEF_GC_THREAD_AGE_THRESHOLD		(60 * 60 * 24 * 7)
