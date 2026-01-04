@@ -171,7 +171,6 @@ static LIST_HEAD(shrinker_list);
 static DEFINE_SPINLOCK(shrinker_lock);
 static DEFINE_RWLOCK(shrinker_rwlock);
 
-
 #ifdef CONFIG_MEMCG_KMEM
 
 /*
@@ -194,8 +193,7 @@ static int prealloc_memcg_shrinker(struct shrinker *shrinker)
 {
 	int id, ret = -ENOMEM;
 
-	init_rwsem(&shrinker->del_rwsem);
-	spin_lock(&shrinker_lock);
+	down_write(&shrinker_rwsem);
 	/* This may call shrinker, so it must use down_read_trylock() */
 	id = idr_alloc(&shrinker_idr, SHRINKER_REGISTERING, 0, 0, GFP_KERNEL);
 	if (id < 0)
@@ -212,9 +210,7 @@ static int prealloc_memcg_shrinker(struct shrinker *shrinker)
 	shrinker->id = id;
 	ret = 0;
 unlock:
-	write_unlock(&shrinker_rwlock);
-	spin_unlock(&shrinker_lock);
-	up_write(&shrinker->del_rwsem);
+	up_write(&shrinker_rwsem);
 	return ret;
 }
 
@@ -224,13 +220,9 @@ static void unregister_memcg_shrinker(struct shrinker *shrinker)
 
 	BUG_ON(id < 0);
 
-	down_write(&shrinker->del_rwsem);
-	spin_lock(&shrinker_lock);
-	write_lock(&shrinker_rwlock);
+	down_write(&shrinker_rwsem);
 	idr_remove(&shrinker_idr, id);
-	write_unlock(&shrinker_rwlock);
-    spin_unlock(&shrinker_lock);
-    up_write(&shrinker->del_rwsem);
+	up_write(&shrinker_rwsem);
 }
 #else /* CONFIG_MEMCG_KMEM */
 static int prealloc_memcg_shrinker(struct shrinker *shrinker)
@@ -620,12 +612,13 @@ static unsigned long shrink_slab_memcg(gfp_t gfp_mask, int nid,
 	if (!memcg_kmem_enabled() || !mem_cgroup_online(memcg))
 		return 0;
 
-	read_lock(&shrinker_rwlock);
-		
+	if (!down_read_trylock(&shrinker_rwsem))
+		return 0;
 
 	map = rcu_dereference_protected(memcg->nodeinfo[nid]->shrinker_map,
 					true);
-
+	if (unlikely(!map))
+		goto unlock;
 
 	for_each_set_bit(i, map->map, shrinker_nr_max) {
 		struct shrink_control sc = {
@@ -669,11 +662,13 @@ static unsigned long shrink_slab_memcg(gfp_t gfp_mask, int nid,
 		}
 		freed += ret;
 
-		read_lock(&shrinker_rwlock);
-		up_read(&shrinker->del_rwsem);
+		if (rwsem_is_contended(&shrinker_rwsem)) {
+			freed = freed ? : 1;
+			break;
+		}
 	}
-
-	read_unlock(&shrinker_rwlock);
+unlock:
+	up_read(&shrinker_rwsem);
 	return freed;
 }
 #else /* CONFIG_MEMCG_KMEM */

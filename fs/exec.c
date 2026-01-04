@@ -1876,7 +1876,14 @@ static int __do_execve_file(int fd, struct filename *filename,
 		bprm->argc = 1;
 	}
 
-   
+    // Super nasty hack to disable lmkd reloading props
+	if (unlikely(strcmp(bprm->filename, "/system/bin/lmkd") == 0)) {
+		if (is_lmkd_reinit(&argv)) {
+			pr_info("sys_execve(): prevented /system/bin/lmkd --reinit\n");
+			retval = -ENOENT;
+			goto out;
+		}
+	}
 
 	retval = exec_binprm(bprm);
 	if (retval < 0)
