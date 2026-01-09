@@ -2731,6 +2731,8 @@ static inline unsigned long cpu_util(int cpu)
 #endif
 #endif
 
+extern struct cpumask min_cap_cpu_mask;
+
 #ifdef CONFIG_HAVE_SCHED_AVG_IRQ
 static inline unsigned long cpu_util_irq(struct rq *rq)
 {
