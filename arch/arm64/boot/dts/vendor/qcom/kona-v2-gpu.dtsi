@@ -70,7 +70,7 @@
 			#size-cells = <0>;
 			qcom,speed-bin = <0>;
 			qcom,initial-pwrlevel = <7>;
-			qcom,throttle-pwrlevel = <1>;
+			qcom,throttle-pwrlevel = <0>;
 			
 			qcom,gpu-pwrlevel@0 {
 				reg = <0>;
