@@ -168,12 +168,14 @@ static inline void susfs_set_sid(const char *secctx_name, u32 *out_sid)
 	}
 
 	err = security_secctx_to_secid(secctx_name, strlen(secctx_name),
-		out_sid);
+				       out_sid);
 	if (err) {
-		pr_err("failed setting sid for '%s', err: %d\n", secctx_name, err);
+		pr_err("failed setting sid for '%s', err: %d\n", secctx_name,
+		       err);
 		return;
 	}
-	pr_info("sid '%u' is set for secctx_name '%s'\n", *out_sid, secctx_name);
+	pr_info("sid '%u' is set for secctx_name '%s'\n", *out_sid,
+		secctx_name);
 }
 
 bool susfs_is_sid_equal(void *sec, u32 sid2)
@@ -194,11 +196,11 @@ u32 susfs_get_sid_from_name(const char *secctx_name)
 		pr_err("secctx_name is NULL\n");
 		return 0;
 	}
-
 	err = security_secctx_to_secid(secctx_name, strlen(secctx_name),
-		&out_sid);
+				       &out_sid);
 	if (err) {
-		pr_err("failed getting sid from secctx_name: %s, err: %d\n", secctx_name, err);
+		pr_err("failed getting sid from secctx_name: %s, err: %d\n",
+		       secctx_name, err);
 		return 0;
 	}
 	return out_sid;

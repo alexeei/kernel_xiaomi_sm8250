@@ -1,32 +1,18 @@
 #include <linux/compiler.h>
 #include <linux/version.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
-#include <linux/sched/signal.h>
-#endif
 #include <linux/slab.h>
 #include <linux/task_work.h>
 #include <linux/thread_info.h>
 #include <linux/seccomp.h>
-#include <linux/capability.h>
-#include <linux/cred.h>
-#include <linux/dcache.h>
-#include <linux/err.h>
-#include <linux/fs.h>
-#include <linux/init.h>
-#include <linux/init_task.h>
-#include <linux/kernel.h>
-#include <linux/kprobes.h>
-#include <linux/mm.h>
-#include <linux/mount.h>
-#include <linux/namei.h>
-#include <linux/nsproxy.h>
-#include <linux/path.h>
 #include <linux/printk.h>
 #include <linux/sched.h>
-#include <linux/stddef.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+#include <linux/sched/signal.h>
+#endif
 #include <linux/string.h>
 #include <linux/types.h>
 #include <linux/uaccess.h>
+#include <linux/stat.h>
 #include <linux/uidgid.h>
 #include <linux/susfs.h>
 
@@ -36,7 +22,6 @@
 #include "klog.h" // IWYU pragma: keep
 #include "manager.h"
 #include "selinux/selinux.h"
-#include "seccomp_cache.h"
 #include "supercalls.h"
 #include "kernel_umount.h"
 #include "kernel_compat.h"
@@ -60,6 +45,9 @@ extern void susfs_run_sus_path_loop(uid_t uid);
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 extern void susfs_reorder_mnt_id(void);
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
+extern void susfs_try_umount(uid_t uid);
+#endif // #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
 
 static bool ksu_enhanced_security_enabled = false;
 
@@ -83,15 +71,6 @@ static const struct ksu_feature_handler enhanced_security_handler = {
 	.get_handler = enhanced_security_feature_get,
 	.set_handler = enhanced_security_feature_set,
 };
-
-static inline bool is_allow_su(void)
-{
-	if (is_manager()) {
-		// we are manager, allow!
-		return true;
-	}
-	return ksu_is_allow_uid_for_current(current_uid().val);
-}
 
 static void ksu_install_manager_fd_tw_func(struct callback_head *cb)
 {
@@ -120,11 +99,11 @@ static void do_install_manager_fd(void)
 #define send_sigkill() force_sig(SIGKILL, current)
 #endif
 
-extern void disable_seccomp(struct task_struct *tsk);
+extern void disable_seccomp(void);
 int ksu_handle_setuid_common(uid_t new_uid, uid_t old_uid, uid_t new_euid)
 {
 #ifdef CONFIG_KSU_DEBUG
-	pr_info("handle_set{res}uid from %d to %d\n", old_uid, new_uid);
+	pr_info("handle_setuid from %d to %d\n", old_uid, new_uid);
 #endif
 
 	// if old process is root, ignore it.
@@ -141,69 +120,51 @@ int ksu_handle_setuid_common(uid_t new_uid, uid_t old_uid, uid_t new_euid)
 		if (is_appuid(old_uid) && new_euid < current_euid().val &&
 		    !ksu_is_allow_uid_for_current(old_uid)) {
 			pr_warn("find suspicious EoP: %d %s, from %d to %d\n",
-				current->pid, current->comm, old_uid,
-				new_euid);
+				current->pid, current->comm, old_uid, new_euid);
 			send_sigkill();
 			return 0;
 		}
 		return 0;
 	}
 
-	// We only interest in process spwaned by zygote
-	if (current_cred() && !susfs_is_sid_equal(current_cred()->security,
-		susfs_zygote_sid)) {
+	if (current_cred() &&
+	    !susfs_is_sid_equal(current_cred()->security, susfs_zygote_sid)) {
 		return 0;
 	}
 
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-	// Check if spawned process is isolated service first, and force to do umount if so  
+	// Check if spawned process is isolated service first, and force to do umount if so
 	if (is_zygote_isolated_service_uid(new_uid)) {
 		goto do_umount;
 	}
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 
 	if (ksu_get_manager_appid() == new_uid % PER_USER_RANGE) {
-		spin_lock_irq(&current->sighand->siglock);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
-		ksu_seccomp_allow_cache(current->seccomp.filter, __NR_reboot);
-#else
-		disable_seccomp(current);
-#endif
-		spin_unlock_irq(&current->sighand->siglock);
+		disable_seccomp();
 		pr_info("install fd for manager (uid=%d)\n", new_uid);
 		do_install_manager_fd();
 		return 0;
 	}
 
 	// Check if spawned process is normal user app and needs to be umounted
-	if (likely(is_zygote_normal_app_uid(new_uid) && ksu_uid_should_umount(new_uid))) {
+	if (likely(is_zygote_normal_app_uid(new_uid) &&
+		   ksu_uid_should_umount(new_uid))) {
 		goto do_umount;
 	}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
 	if (ksu_is_allow_uid_for_current(new_uid)) {
-		if (current->seccomp.mode == SECCOMP_MODE_FILTER &&
-		    current->seccomp.filter) {
-			spin_lock_irq(&current->sighand->siglock);
-			ksu_seccomp_allow_cache(current->seccomp.filter,
-						__NR_reboot);
-			spin_unlock_irq(&current->sighand->siglock);
-		}
+		disable_seccomp();
 	}
-#else
-	if (ksu_is_allow_uid_for_current(new_uid)) {
-		spin_lock_irq(&current->sighand->siglock);
-		disable_seccomp(current);
-		spin_unlock_irq(&current->sighand->siglock);
-	}
-#endif
 
 	return 0;
 
 do_umount:
+#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
+	susfs_try_umount(new_uid);
+#else
 	// Handle kernel umount
 	ksu_handle_umount(old_uid, new_uid);
-
+#endif // #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 	// We can reorder the mnt_id now after all sus mounts are umounted
 	susfs_reorder_mnt_id();
@@ -233,7 +194,7 @@ void ksu_setuid_hook_init(void)
 
 void ksu_setuid_hook_exit(void)
 {
-	pr_info("ksu_core_exit\n");
+	pr_info("ksu setuid exit\n");
 	ksu_kernel_umount_exit();
 	ksu_unregister_feature_handler(KSU_FEATURE_ENHANCED_SECURITY);
 }

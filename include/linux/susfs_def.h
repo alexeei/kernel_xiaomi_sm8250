@@ -14,6 +14,7 @@
 #define CMD_SUSFS_ADD_SUS_PATH_LOOP 0x55553
 #define CMD_SUSFS_ADD_SUS_MOUNT 0x55560 /* deprecated */
 #define CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS 0x55561
+#define CMD_SUSFS_UMOUNT_FOR_ZYGOTE_ISO_SERVICE 0x55562 /* deprecated */
 #define CMD_SUSFS_ADD_SUS_KSTAT 0x55570
 #define CMD_SUSFS_UPDATE_SUS_KSTAT 0x55571
 #define CMD_SUSFS_ADD_SUS_KSTAT_STATICALLY 0x55572
@@ -25,10 +26,9 @@
 #define CMD_SUSFS_SHOW_VERSION 0x555e1
 #define CMD_SUSFS_SHOW_ENABLED_FEATURES 0x555e2
 #define CMD_SUSFS_SHOW_VARIANT 0x555e3
-#define CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING 0x60010
-#define CMD_SUSFS_SHOW_SUS_SU_WORKING_MODE 0x555e4
-#define CMD_SUSFS_IS_SUS_SU_READY 0x555f0
-#define CMD_SUSFS_SUS_SU 0x60000
+#define CMD_SUSFS_SHOW_SUS_SU_WORKING_MODE 0x555e4 /* deprecated */
+#define CMD_SUSFS_IS_SUS_SU_READY 0x555f0 /* deprecated */
+#define CMD_SUSFS_SUS_SU 0x60000 /* deprecated */
 #define CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING 0x60010
 #define CMD_SUSFS_ADD_SUS_MAP 0x60020
 
@@ -42,15 +42,16 @@
 #define TRY_UMOUNT_DETACH 1 /* used by susfs_try_umount() */
 
 #define DEFAULT_KSU_MNT_ID 500000 /* used by mount->mnt_id */
-#define DEFAULT_KSU_MNT_ID_FOR_KSU_PROC_UNSHARE 1000000 /* used by vfsmount->susfs_mnt_id_backup */
 #define DEFAULT_KSU_MNT_GROUP_ID 5000 /* used by mount->mnt_group_id */
 
 /*
- * 
  * mount->mnt.susfs_mnt_id_backup => storing original mount's mnt_id
  * inode->i_mapping->flags => A 'unsigned long' type storing flag 'AS_FLAGS_', bit 1 to 31 is not usable since 6.12
+ * nd->state => storing flag 'ND_STATE_'
+ * nd->flags => storing flag 'ND_FLAGS_'
+ * task_struct->thread_info.flags => storing flag 'TIF_'
  */
-
+ // thread_info->flags is unsigned long :D
 #define TIF_PROC_UMOUNTED 33
 
 #define AS_FLAGS_SUS_PATH 33
@@ -72,9 +73,8 @@
 #define ND_STATE_OPEN_LAST 64
 #define ND_STATE_LAST_SDCARD_SUS_PATH 128
 #define ND_FLAGS_LOOKUP_LAST		0x2000000
-
+ 
 #define MAGIC_MOUNT_WORKDIR "/debug_ramdisk/workdir"
-
 
 static inline bool susfs_is_current_proc_umounted(void) {
 	return test_ti_thread_flag(&current->thread_info, TIF_PROC_UMOUNTED);
@@ -83,5 +83,5 @@ static inline bool susfs_is_current_proc_umounted(void) {
 static inline void susfs_set_current_proc_umounted(void) {
 	set_ti_thread_flag(&current->thread_info, TIF_PROC_UMOUNTED);
 }
-
 #endif // #ifndef KSU_SUSFS_DEF_H
+

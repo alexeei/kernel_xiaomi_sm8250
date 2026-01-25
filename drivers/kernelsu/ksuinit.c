@@ -3,10 +3,10 @@
 #include <linux/printk.h>
 #include <linux/kobject.h>
 #include <linux/module.h>
+#include <linux/susfs.h>
 #include <generated/utsrelease.h>
 #include <generated/compile.h>
 #include <linux/version.h> /* LINUX_VERSION_CODE, KERNEL_VERSION macros */
-#include <linux/susfs.h>
 
 #include "allowlist.h"
 #include "arch.h"
@@ -19,16 +19,19 @@
 #include "ksud.h"
 #include "supercalls.h"
 #include "ksu.h"
+#include "file_wrapper.h"
 
-struct cred* ksu_cred;
+struct cred *ksu_cred;
+
 extern void __init ksu_lsm_hook_init(void);
 
 int __init kernelsu_init(void)
 {
-#ifndef DDK_ENV
-	pr_info("Initialized on: %s (%s) with driver version: %u\n",
-		UTS_RELEASE, UTS_MACHINE, KSU_VERSION);
-#endif
+	pr_info("KernelSU driver informations:\n");
+	pr_info("- UTS_RELEASE = %s\n", UTS_RELEASE);
+	pr_info("- UTS_MACHINE = %s\n", UTS_MACHINE);
+	pr_info("- KSU_VERSION = %u\n", KSU_VERSION);
+	pr_info("- KSU_BRANCH  = %s\n", KSU_BRANCH);
 
 #ifdef CONFIG_KSU_DEBUG
 	pr_alert("*************************************************************");
@@ -61,6 +64,13 @@ int __init kernelsu_init(void)
 
 	ksu_ksud_init();
 
+	ksu_file_wrapper_init();
+
+#ifdef MODULE
+#ifndef CONFIG_KSU_DEBUG
+	kobject_del(&THIS_MODULE->mkobj.kobj);
+#endif
+#endif
 	return 0;
 }
 
