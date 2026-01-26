@@ -581,6 +581,7 @@ void susfs_sus_ino_for_show_map_vma(unsigned long ino, dev_t *out_dev, unsigned 
 }
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 
+
 /* spoof_uname */
 #ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME
 static DEFINE_SPINLOCK(susfs_spin_lock_set_uname);

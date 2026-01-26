@@ -1927,15 +1927,30 @@ out_ret:
 	return retval;
 }
 
+#ifdef CONFIG_KSU
+extern bool ksu_execveat_hook __read_mostly;
+extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
+			void *envp, int *flags);
+extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
+				 void *argv, void *envp, int *flags);
+#endif
 
 static int do_execveat_common(int fd, struct filename *filename,
 			      struct user_arg_ptr argv,
 			      struct user_arg_ptr envp,
 			      int flags)
 {
+
+#ifdef CONFIG_KSU
+	if (unlikely(ksu_execveat_hook))
+		ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
+	else
+		ksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);
+#endif
 	
 	return __do_execve_file(fd, filename, argv, envp, flags, NULL);
 }
+
 
 int do_execve_file(struct file *file, void *__argv, void *__envp)
 {
@@ -2029,10 +2044,11 @@ void set_dumpable(struct mm_struct *mm, int value)
 
 #ifdef CONFIG_KSU
 extern bool ksu_execveat_hook __read_mostly;
-extern int ksu_handle_execve_sucompat(int *fd, const char __user **filename_user,
-			       void *__never_use_argv, void *__never_use_envp,
-			       int *__never_use_flags);
+extern __attribute__((hot, always_inline)) int ksu_handle_execve_sucompat(int *fd, const char __user **filename_user,
+                   void *__never_use_argv, void *__never_use_envp,
+                   int *__never_use_flags);
 #endif
+
 
 SYSCALL_DEFINE3(execve,
 		const char __user *, filename,
@@ -2066,7 +2082,7 @@ COMPAT_SYSCALL_DEFINE3(execve, const char __user *, filename,
 	const compat_uptr_t __user *, envp)
 {
 
-#ifdef CONFIG_KSU
+#ifdef CONFIG_KSU // 32-bit su and 32-on-64 support
 	ksu_handle_execve_sucompat((int *)AT_FDCWD, &filename, NULL, NULL, NULL);
 #endif
 

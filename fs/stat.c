@@ -123,6 +123,11 @@ EXPORT_SYMBOL(vfs_getattr_nosec);
  *
  * 0 will be returned on success, and a -ve error code if unsuccessful.
  */
+
+#ifdef CONFIG_KSU
+extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);
+#endif
+
 int vfs_getattr(const struct path *path, struct kstat *stat,
 		u32 request_mask, unsigned int query_flags)
 {
