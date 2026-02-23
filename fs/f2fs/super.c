@@ -4448,10 +4448,12 @@ try_onemore:
 	} else {
 		err = f2fs_recover_fsync_data(sbi, true);
 
+
 		if (!f2fs_readonly(sb) && err > 0) {
 			err = -EINVAL;
 			f2fs_err(sbi, "Need to recover fsync data");
 			goto free_meta;
+
 		}
 	}
 reset_checkpoint:
