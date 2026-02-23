@@ -294,6 +294,7 @@ static irqreturn_t tcs_tx_done(int irq, void *p)
 		ipc_log_string(drv->ipc_log_ctx,
 			       "IRQ response: m=%d err=%d", i, err);
 
+
 		/*
 		 * if wake tcs was re-purposed for sending active
 		 * votes, clear AMC trigger & enable modes and
@@ -308,6 +309,7 @@ static irqreturn_t tcs_tx_done(int irq, void *p)
 			 */
 			enable_tcs_irq(drv, i, false);
 		}
+
 skip:
 		/* Reclaim the TCS */
 		write_tcs_reg(drv, RSC_DRV_CMD_ENABLE, i, 0);
