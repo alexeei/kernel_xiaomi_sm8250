@@ -728,7 +728,7 @@ void object_err(struct kmem_cache *s, struct page *page,
 	} else {
 		print_trailer(s, page, object);
 	}
-	slab_panic(reason);
+
 }
 
 static __printf(3, 4) void slab_err(struct kmem_cache *s, struct page *page,
