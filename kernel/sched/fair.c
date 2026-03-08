@@ -7935,9 +7935,8 @@ cpu_util_next_walt(int cpu, struct task_struct *p, int dst_cpu)
 static long
 compute_energy(struct task_struct *p, int dst_cpu, struct perf_domain *pd)
 {
-	unsigned long cpu_util, max_util, sum_util, util_freq, util_running;
+	unsigned long cpu_util, max_util, sum_util;
 	unsigned long cpu_cap, energy = 0;
-	struct task_struct *tsk;
 	int cpu;
 
 	for (; pd; pd = pd->next) {
@@ -12359,7 +12358,7 @@ int newidle_balance(struct rq *this_rq, struct rq_flags *rf)
 	int pulled_task = 0;
 	u64 avg_idle = this_rq->avg_idle;
 #ifdef CONFIG_SCHED_WALT
-	bool prefer_spread = prefer_spread_on_idle(this_cpu);
+	bool prefer_spread = prefer_spread_on_idle(this_cpu, true);
 	bool force_lb = (!is_min_capacity_cpu(this_cpu) &&
 				silver_has_big_tasks() &&
 				sysctl_sched_force_lb_enable &&
