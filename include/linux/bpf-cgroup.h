@@ -346,35 +346,9 @@ static inline int cgroup_bpf_prog_query(const union bpf_attr *attr,
 	return -EINVAL;
 }
 
-#define BPF_CGROUP_RUN_PROG_SETSOCKOPT(sock, level, optname, optval, optlen,   \
-				       kernel_optval)			       \
-({									       \
-	int __ret = 0;							       \
-	if (cgroup_bpf_enabled)						       \
-		__ret = __cgroup_bpf_run_filter_setsockopt(sock, level,	       \
-							   optname, optval,    \
-							   optlen,	       \
-							   kernel_optval);     \
-	__ret;								       \
-})
-#define BPF_CGROUP_GETSOCKOPT_MAX_OPTLEN(optlen)			       \
-({									       \
-	int __ret = 0;							       \
-	if (cgroup_bpf_enabled)						       \
-		get_user(__ret, optlen);				       \
-	__ret;								       \
-})
-#define BPF_CGROUP_RUN_PROG_GETSOCKOPT(sock, level, optname, optval, optlen,   \
-				       max_optlen, retval)		       \
-({									       \
-	int __ret = retval;						       \
-	if (cgroup_bpf_enabled)						       \
-		__ret = __cgroup_bpf_run_filter_getsockopt(sock, level,	       \
-							   optname, optval,    \
-							   optlen, max_optlen, \
-							   retval);	       \
-	__ret;								       \
-})
+
+
+
 
 static inline void bpf_cgroup_storage_set(
 	struct bpf_cgroup_storage *storage[MAX_BPF_CGROUP_STORAGE_TYPE]) {}
