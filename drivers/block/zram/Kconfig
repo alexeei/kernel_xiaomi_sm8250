@@ -44,6 +44,11 @@ config ZRAM_WRITEBACK
 
 	 See Documentation/blockdev/zram.txt for more information.
 
+config ZRAM_SIZE_OVERRIDE
+	int "ZRAM size to set from kernel. (e.g) set 4GB using config: ZRAM_SIZE_OVERRIDE=4"
+	range 1 16
+	default 4
+
 config ZRAM_MEMORY_TRACKING
 	bool "Track zRam block status"
 	depends on ZRAM && DEBUG_FS
