@@ -506,6 +506,8 @@ slhc_uncompress(struct slcompress *comp, unsigned char *icp, int isize)
 		comp->sls_i_error++;
 		return 0;
 	}
+	if (!comp->rstate)
+		goto bad;
 	changes = *cp++;
 	if(changes & NEW_C){
 		/* Make sure the state index is in range, then grab the state.
@@ -648,6 +650,10 @@ slhc_remember(struct slcompress *comp, unsigned char *icp, int isize)
 
 	unsigned char index;
 
+	if (!comp->rstate) {
+		comp->sls_i_error++;
+		return slhc_toss(comp);
+	}
 	if(isize < 20) {
 		/* The packet is shorter than a legal IP header */
 		comp->sls_i_runt++;
