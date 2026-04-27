@@ -441,7 +441,7 @@ static int sr_init_command(struct scsi_cmnd *SCpnt)
 
 	switch (req_op(rq)) {
 	case REQ_OP_WRITE:
-		if (!cd->writeable)
+		if (get_disk_ro(cd->disk))
 			goto out;
 		SCpnt->cmnd[0] = WRITE_10;
 		cd->cdi.media_written = 1;
@@ -740,8 +740,12 @@ static int sr_probe(struct device *dev)
 
 	sdev->sector_size = 2048;	/* A guess, just in case */
 
-	/* FIXME: need to handle a get_capabilities failure properly ?? */
-	get_capabilities(cd);
+
+	error = -ENOMEM;
+	if (get_capabilities(cd))
+		goto fail_minor;
+	cdrom_probe_write_features(&cd->cdi);
+
 	sr_vendor_init(cd);
 
 	set_capacity(disk, cd->capacity);
@@ -957,14 +961,6 @@ static void get_capabilities(struct scsi_cd *cd)
 		cd->cdi.mask |= CDC_SELECT_DISC;
 	/*else    I don't think it can close its tray
 		cd->cdi.mask |= CDC_CLOSE_TRAY; */
-
-	/*
-	 * if DVD-RAM, MRW-W or CD-RW, we are randomly writable
-	 */
-	if ((cd->cdi.mask & (CDC_DVD_RAM | CDC_MRW_W | CDC_RAM | CDC_CD_RW)) !=
-			(CDC_DVD_RAM | CDC_MRW_W | CDC_RAM | CDC_CD_RW)) {
-		cd->writeable = 1;
-	}
 
 	kfree(buffer);
 }
