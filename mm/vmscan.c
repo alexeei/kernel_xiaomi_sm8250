@@ -59,6 +59,8 @@
 
 #include "internal.h"
 
+#include <linux/sched/signal.h>
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/vmscan.h>
 
@@ -3320,6 +3322,20 @@ static bool allow_direct_reclaim(pg_data_t *pgdat, bool using_kswapd)
 	return wmark_ok;
 }
 
+#define CRITICAL_OOM_SCORE_ADJ	(-900)
+
+
+static __always_inline bool task_is_critical(void)
+{
+	if (current->flags & PF_KTHREAD)
+		return false;
+
+	if (unlikely(!current->signal))
+		return false;
+
+	return READ_ONCE(current->signal->oom_score_adj) <= CRITICAL_OOM_SCORE_ADJ;
+}
+
 /*
  * Throttle direct reclaimers if backing storage is backed by the network
  * and the PFMEMALLOC reserve for the preferred node is getting dangerously
@@ -3381,6 +3397,9 @@ static bool throttle_direct_reclaim(gfp_t gfp_mask, struct zonelist *zonelist,
 
 	/* If no zone was usable by the allocation flags then do not throttle */
 	if (!pgdat)
+		goto out;
+
+if (task_is_critical())
 		goto out;
 
 	/* Account for the throttling */
