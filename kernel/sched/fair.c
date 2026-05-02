@@ -4272,7 +4272,11 @@ static inline void update_misfit_status(struct task_struct *p, struct rq *rq)
 		return;
 	}
 
-	rq->misfit_task_load = task_h_load(p);
+	/*
+	 * Make sure that misfit_task_load will not be null even if
+	 * task_h_load() returns 0.
+	 */
+	rq->misfit_task_load = max_t(unsigned long, task_h_load(p), 1);
 }
 
 #else /* CONFIG_SMP */
@@ -9659,6 +9663,8 @@ static bool __update_blocked_others(struct rq *rq, bool *done)
 		  update_dl_rq_load_avg(now, rq, curr_class == &dl_sched_class) |
 		  update_irq_load_avg(rq, 0);
 
+    
+
 	if (others_have_blocked(rq))
 		*done = false;
 
@@ -9780,6 +9786,12 @@ static void update_blocked_averages(int cpu)
 
 	rq_lock_irqsave(rq, &rf);
 	update_rq_clock(rq);
+
+    /*
+	 * update_cfs_rq_load_avg() can call cpufreq_update_util(). Make sure
+	 * that RT, DL and IRQ signals have been updated before updating CFS.
+	 */
+	
 
 	decayed |= __update_blocked_others(rq, &done);
 	decayed |= __update_blocked_fair(rq, &done);
