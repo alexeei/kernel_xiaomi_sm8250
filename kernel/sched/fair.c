@@ -5738,7 +5738,10 @@ static int sched_idle_rq(struct rq *rq)
 			rq->nr_running);
 }
 
-
+static int sched_idle_cpu(int cpu)
+{
+	return sched_idle_rq(cpu_rq(cpu));
+}
 
 /*
  * The enqueue_task method is called before nr_running is
@@ -5891,6 +5894,7 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	int task_sleep = flags & DEQUEUE_SLEEP;
 	int idle_h_nr_running = idle_policy(p->policy);
 	bool was_sched_idle = sched_idle_rq(rq);
+
 
 	/*
 	 * The code below (indirectly) updates schedutil which looks at
@@ -6671,14 +6675,6 @@ skip_spare:
 }
 
 
-/* CPU only has SCHED_IDLE tasks enqueued */
-static int sched_idle_cpu(int cpu)
-{
-	struct rq *rq = cpu_rq(cpu);
-
-	return unlikely(rq->nr_running == rq->cfs.idle_h_nr_running &&
-			rq->nr_running);
-}
 
 /*
  * find_idlest_group_cpu - find the idlest CPU among the CPUs in the group.
