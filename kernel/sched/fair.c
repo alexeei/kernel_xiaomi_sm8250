@@ -98,11 +98,7 @@ unsigned int normalized_sysctl_sched_base_slice	= 500000ULL;
 
 
 
-/*
- * After fork, child runs first. If set to 0 (default) then
- * parent will (try to) run first.
- */
-unsigned int sysctl_sched_child_runs_first __read_mostly;
+
 
 
 
