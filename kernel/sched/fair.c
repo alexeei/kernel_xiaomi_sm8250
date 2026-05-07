@@ -8824,7 +8824,7 @@ static void detach_entity_cfs_rq(struct sched_entity *se);
 static void migrate_task_rq_fair(struct task_struct *p, int new_cpu)
 {
 	
-		struct sched_entity *se = &p->se;
+		//struct sched_entity *se = &p->se;
 
 	if (p->on_rq == TASK_ON_RQ_MIGRATING) {
 		/*
