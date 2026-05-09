@@ -1,11 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 
-#define CPUPRI_NR_PRIORITIES	MAX_RT_PRIO
+#define CPUPRI_NR_PRIORITIES	(MAX_RT_PRIO+1)
 
 #define CPUPRI_INVALID		-1
 
 #define CPUPRI_NORMAL		 0
 /* values 1-99 are RT priorities 0-99 */
+#define CPUPRI_HIGHER		100
 
 struct cpupri_vec {
 	atomic_t		count;
