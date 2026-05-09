@@ -38,7 +38,7 @@ static int convert_prio(int prio)
 	else if (prio >= MAX_RT_PRIO)
 		cpupri = CPUPRI_NORMAL;
 	else
-		cpupri = MAX_RT_PRIO - prio;
+		cpupri = MAX_RT_PRIO - prio -1;
 
 	return cpupri;
 }
