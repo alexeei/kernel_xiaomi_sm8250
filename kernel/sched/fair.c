@@ -3887,10 +3887,12 @@ update_tg_cfs_load(struct cfs_rq *cfs_rq, struct sched_entity *se, struct cfs_rq
 
 	load_sum = se_weight(se) * runnable_sum;
 	load_avg = div_s64(load_sum, divider);
+    se->avg.load_sum = runnable_sum;
 
 	delta = load_avg - se->avg.load_avg;
+    if (!delta)
+		return;
 	
-	se->avg.load_sum = runnable_sum;
 	se->avg.load_avg = load_avg;
 	add_positive(&cfs_rq->avg.load_avg, delta);
 	cfs_rq->avg.load_sum = cfs_rq->avg.load_avg * divider;
@@ -4142,6 +4144,8 @@ static void detach_entity_load_avg(struct cfs_rq *cfs_rq, struct sched_entity *s
 	cfs_rq->avg.util_sum = max_t(u32, cfs_rq->avg.util_sum,
 					  cfs_rq->avg.util_avg * PELT_MIN_DIVIDER);
 
+    sub_positive(&cfs_rq->avg.runnable_avg, se->avg.runnable_avg);
+    cfs_rq->avg.runnable_sum = cfs_rq->avg.runnable_avg * divider;
 	add_tg_cfs_propagate(cfs_rq, -se->avg.load_sum);
 
 	cfs_rq_util_change(cfs_rq, 0);
