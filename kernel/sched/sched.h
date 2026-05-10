@@ -2620,7 +2620,6 @@ static inline void sched_uclamp_enable(void)
 		static_branch_enable(&sched_uclamp_used);
 }
 
-static inline void sched_uclamp_enable(void) {}
 
 static inline unsigned long uclamp_rq_get(struct rq *rq,
 					  enum uclamp_id clamp_id)
