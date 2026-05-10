@@ -3806,7 +3806,8 @@ update_tg_cfs_util(struct cfs_rq *cfs_rq, struct sched_entity *se, struct cfs_rq
 	add_positive(&cfs_rq->avg.util_sum, delta_sum);
 
 	/* See update_cfs_rq_load_avg() */
-	cfs_rq->avg.util_sum = cfs_rq->avg.util_avg * divider;
+	cfs_rq->avg.util_sum = max_t(u32, cfs_rq->avg.util_sum,
+					  cfs_rq->avg.util_avg * PELT_MIN_DIVIDER);
 }
 
 static inline void
@@ -4135,9 +4136,8 @@ static void detach_entity_load_avg(struct cfs_rq *cfs_rq, struct sched_entity *s
 	u32 divider = get_pelt_divider(&cfs_rq->avg);
 	dequeue_load_avg(cfs_rq, se);
 	sub_positive(&cfs_rq->avg.util_avg, se->avg.util_avg);
-	cfs_rq->avg.util_sum = cfs_rq->avg.util_avg * divider;
-    sub_positive(&cfs_rq->avg.runnable_avg, se->avg.runnable_avg);
-	cfs_rq->avg.runnable_sum = cfs_rq->avg.runnable_avg * divider;
+	
+    sub_positive(&cfs_rq->avg.util_sum, se->avg.util_sum);
 	/* See update_cfs_rq_load_avg() */
 	cfs_rq->avg.util_sum = max_t(u32, cfs_rq->avg.util_sum,
 					  cfs_rq->avg.util_avg * PELT_MIN_DIVIDER);
