@@ -5373,8 +5373,7 @@ void unthrottle_cfs_rq(struct cfs_rq *cfs_rq)
 			break;
 
 		cfs_rq = cfs_rq_of(se);
-		update_load_avg(cfs_rq, se, 0);
-		se_update_runnable(se);
+		enqueue_entity(cfs_rq, se, ENQUEUE_WAKEUP);
 		cfs_rq->h_nr_running += task_delta;
 		cfs_rq->idle_h_nr_running += idle_task_delta;
 		walt_inc_throttled_cfs_rq_stats(&cfs_rq->walt_stats, tcfs_rq);
@@ -5386,6 +5385,10 @@ void unthrottle_cfs_rq(struct cfs_rq *cfs_rq)
 
 	for_each_sched_entity(se) {
 		cfs_rq = cfs_rq_of(se);
+
+        update_load_avg(cfs_rq, se, UPDATE_TG);
+		se_update_runnable(se);
+
 
 		cfs_rq->h_nr_running += task_delta;
 		cfs_rq->idle_h_nr_running += idle_task_delta;
@@ -5423,21 +5426,9 @@ unthrottle_throttle:
 
 	
 
-	if (!se) {
-		add_nr_running(rq, task_delta);
+	if (!se)
 		walt_inc_throttled_cfs_rq_stats(&rq->walt_stats, tcfs_rq);
-	}
-
-     /*
-	 * The cfs_rq_throttled() breaks in the above iteration can result in
-	 * incomplete leaf list maintenance, resulting in triggering the
-	 * assertion below.
-	 */
-	for_each_sched_entity(se) {
-		cfs_rq = cfs_rq_of(se);
-
-		list_add_leaf_cfs_rq(cfs_rq);
-	}
+	
 
 	assert_list_leaf_cfs_rq(rq);
 
