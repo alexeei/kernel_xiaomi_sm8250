@@ -4201,11 +4201,12 @@ static inline void update_load_avg(struct cfs_rq *cfs_rq, struct sched_entity *s
 		update_tg_load_avg(cfs_rq, 0);
 
 	} else if (decayed) {
-		cfs_rq_util_change(cfs_rq, 0);
+		
 
 		if (flags & UPDATE_TG)
 			update_tg_load_avg(cfs_rq, 0);
 	}
+    cfs_rq_util_change(cfs_rq, 0);
 }
 
 #ifndef CONFIG_64BIT
@@ -4330,20 +4331,6 @@ static inline void util_est_enqueue(struct cfs_rq *cfs_rq,
 	trace_sched_util_est_cpu(cpu_of(rq_of(cfs_rq)), cfs_rq);
 }
 
-static inline void util_est_dequeue(struct cfs_rq *cfs_rq,
-				    struct task_struct *p)
-{
-	unsigned int enqueued;
-
-	if (!sched_feat(UTIL_EST))
-		return;
-
-	/* Update root cfs_rq's estimated utilization */
-	enqueued  = cfs_rq->avg.util_est.enqueued;
-	enqueued -= min_t(unsigned int, enqueued, _task_util_est(p));
-	WRITE_ONCE(cfs_rq->avg.util_est.enqueued, enqueued);
-
-}
 
 static inline void util_est_dequeue(struct cfs_rq *cfs_rq,
 				    struct task_struct *p)
@@ -8764,7 +8751,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int sd_flag, int wake_f
 
 		record_wakee(p);
 
-		if (sched_energy_enabled) {
+		if (sched_energy_enabled()) {
 
 #ifdef CONFIG_SCHED_WALT
 			new_cpu = find_energy_efficient_cpu(p, prev_cpu, sync,
