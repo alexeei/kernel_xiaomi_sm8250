@@ -160,11 +160,9 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync, bool rt
 		 * sync wakes, treat the current CPU as idle if @current is the
 		 * only running task.
 		 */
-		if ((sync && cpu == this_cpu && rq->nr_running == 1) ||
-		    available_idle_cpu(cpu) || sched_idle_cpu(cpu)) {
+		if (!has_idle && uc_min <= arch_scale_min_freq_capacity(cpu)) {
 			/* Discard any previous non-idle candidate */
-			if (!has_idle)
-				best = curr;
+			best = curr;
 			has_idle = true;
 
 			/* Nonzero exit latency indicates this CPU is idle */
