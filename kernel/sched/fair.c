@@ -3614,6 +3614,9 @@ static inline bool cfs_rq_is_decayed(struct cfs_rq *cfs_rq)
 
     if (cfs_rq->avg.runnable_sum)
 		return false;
+
+    if (child_cfs_rq_on_list(cfs_rq))
+		return false;
 	
 	return true;
 }
