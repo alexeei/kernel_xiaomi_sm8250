@@ -17,6 +17,26 @@ update_irq_load_avg(struct rq *rq, u64 running)
 }
 #endif
 
+#ifdef CONFIG_SCHED_THERMAL_PRESSURE
+int update_thermal_load_avg(u64 now, struct rq *rq, u64 capacity);
+
+static inline u64 thermal_load_avg(struct rq *rq)
+{
+	return READ_ONCE(rq->avg_thermal.load_avg);
+}
+#else
+static inline int
+update_thermal_load_avg(u64 now, struct rq *rq, u64 capacity)
+{
+	return 0;
+}
+
+static inline u64 thermal_load_avg(struct rq *rq)
+{
+	return 0;
+}
+#endif
+
 #define PELT_MIN_DIVIDER	(LOAD_AVG_MAX - 1024)
 
 static inline u32 get_pelt_divider(struct sched_avg *avg)
@@ -155,6 +175,18 @@ update_dl_rq_load_avg(u64 now, struct rq *rq, int running)
 {
 	return 0;
 }
+
+static inline int
+update_thermal_load_avg(u64 now, struct rq *rq, u64 capacity)
+{
+	return 0;
+}
+
+static inline u64 thermal_load_avg(struct rq *rq)
+{
+	return 0;
+}
+
 
 static inline int
 update_irq_load_avg(struct rq *rq, u64 running)

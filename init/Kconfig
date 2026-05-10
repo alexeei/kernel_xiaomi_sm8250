@@ -1553,6 +1553,10 @@ config PCSPKR_PLATFORM
           This option allows to disable the internal PC-Speaker
           support, saving some memory.
 
+config SCHED_THERMAL_PRESSURE
+	bool "Enable periodic averaging of thermal pressure"
+	depends on SMP
+
 config BASE_FULL
 	default y
 	bool "Enable full-sized data structures for core" if EXPERT
