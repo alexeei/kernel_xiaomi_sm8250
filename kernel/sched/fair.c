@@ -5644,10 +5644,9 @@ static void do_sched_cfs_slack_timer(struct cfs_bandwidth *cfs_b)
 	if (!runtime)
 		return;
 
-	runtime = distribute_cfs_runtime(cfs_b, runtime);
+	distribute_cfs_runtime(cfs_b);
 
 	raw_spin_lock(&cfs_b->lock);
-	lsub_positive(&cfs_b->runtime, runtime);
 	cfs_b->distribute_running = 0;
 	raw_spin_unlock(&cfs_b->lock);
 }
@@ -6061,7 +6060,6 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct cfs_rq *cfs_rq;
 	struct sched_entity *se = &p->se;
-    int task_new = !(flags & ENQUEUE_WAKEUP);
 	bool prefer_idle = sched_feat(EAS_PREFER_IDLE) ?
 				(schedtune_prefer_idle(p) > 0) : 0;
 	int task_new = !(flags & ENQUEUE_WAKEUP);
