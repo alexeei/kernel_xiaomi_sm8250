@@ -5366,6 +5366,7 @@ void unthrottle_cfs_rq(struct cfs_rq *cfs_rq)
 	/* Nothing to run but something to decay (on_list)? Complete the branch */
 	if (!cfs_rq->load.weight) {
 		if (cfs_rq->on_list)
+          goto unthrottle_throttle;
 		return;
 	}
 
