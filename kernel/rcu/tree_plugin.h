@@ -287,7 +287,7 @@ static void rcu_preempt_ctxt_queue(struct rcu_node *rnp, struct rcu_data *rdp)
 	if (blkd_state & RCU_EXP_BLKD &&
 	    t->rcu_read_unlock_special.b.exp_need_qs) {
 		t->rcu_read_unlock_special.b.exp_need_qs = false;
-		rcu_report_exp_rdp(rdp->rsp, rdp, true);
+		rcu_report_exp_rdp(rdp->rsp, rdp);
 	} else {
 		WARN_ON_ONCE(t->rcu_read_unlock_special.b.exp_need_qs);
 	}
@@ -386,7 +386,7 @@ static void rcu_preempt_note_context_switch(bool preempt)
 	 */
 	rcu_preempt_qs();
 	if (rdp->deferred_qs)
-		rcu_report_exp_rdp(rcu_state_p, rdp, true);
+		rcu_report_exp_rdp(rcu_state_p, rdp);
 }
 
 /*
@@ -513,7 +513,7 @@ rcu_preempt_deferred_qs_irqrestore(struct task_struct *t, unsigned long flags)
 	if (special.b.exp_need_qs || rdp->deferred_qs) {
 		t->rcu_read_unlock_special.b.exp_need_qs = false;
 		rdp->deferred_qs = false;
-		rcu_report_exp_rdp(rcu_state_p, rdp, true);
+		rcu_report_exp_rdp(rcu_state_p, rdp);
 		if (!t->rcu_read_unlock_special.s) {
 			local_irq_restore(flags);
 			return;
