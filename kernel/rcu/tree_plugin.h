@@ -759,13 +759,13 @@ static int rcu_print_task_exp_stall(struct rcu_node *rnp)
  * block the newly created grace period, so set up ->gp_tasks accordingly.
  */
 static void
-rcu_preempt_check_blocked_tasks(struct rcu_state *rsp, struct rcu_node *rnp)
+rcu_preempt_check_blocked_tasks(struct rcu_node *rnp)
 {
 	struct task_struct *t;
 
 	RCU_LOCKDEP_WARN(preemptible(), "rcu_preempt_check_blocked_tasks() invoked with preemption enabled!!!\n");
 	if (WARN_ON_ONCE(rcu_preempt_blocked_readers_cgp(rnp)))
-		dump_blkd_tasks(rsp, rnp, 10);
+		dump_blkd_tasks(rnp, 10);
 	if (rcu_preempt_has_tasks(rnp) &&
 	    (rnp->qsmaskinit || rnp->wait_blkd_tasks)) {
 		WRITE_ONCE(rnp->gp_tasks, rnp->blkd_tasks.next);
@@ -886,7 +886,7 @@ void exit_rcu(void)
  * specified number of elements.
  */
 static void
-dump_blkd_tasks(struct rcu_state *rsp, struct rcu_node *rnp, int ncheck)
+dump_blkd_tasks(struct rcu_node *rnp, int ncheck)
 {
 	int cpu;
 	int i;
@@ -1950,7 +1950,7 @@ static void wake_nocb_leader_defer(struct rcu_data *rdp, int waketype,
  * Does the specified CPU need an RCU callback for the specified flavor
  * of rcu_barrier()?
  */
-static bool rcu_nocb_cpu_needs_barrier(struct rcu_state *rsp, int cpu)
+static bool rcu_nocb_cpu_needs_barrier(int cpu)
 {
 	struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
 	unsigned long ret;
@@ -2433,7 +2433,7 @@ static void __init rcu_boot_init_nocb_percpu_data(struct rcu_data *rdp)
  * brought online out of order, this can require re-organizing the
  * leader-follower relationships.
  */
-static void rcu_spawn_one_nocb_kthread(struct rcu_state *rsp, int cpu)
+static void rcu_spawn_one_nocb_kthread(int cpu)
 {
 	struct rcu_data *rdp;
 	struct rcu_data *rdp_last;
@@ -2470,7 +2470,7 @@ static void rcu_spawn_one_nocb_kthread(struct rcu_state *rsp, int cpu)
 
 	/* Spawn the kthread for this CPU and RCU flavor. */
 	t = kthread_run(rcu_nocb_kthread, rdp_spawn,
-			"rcuo%c/%d", rsp->abbr, cpu);
+			"rcuo%c/%d", rcu_state.abbr, cpu);
 	BUG_ON(IS_ERR(t));
 	WRITE_ONCE(rdp_spawn->nocb_kthread, t);
 }
@@ -2508,7 +2508,7 @@ module_param(rcu_nocb_leader_stride, int, 0444);
 /*
  * Initialize leader-follower relationships for all no-CBs CPU.
  */
-static void __init rcu_organize_nocb_kthreads(struct rcu_state *rsp)
+static void __init rcu_organize_nocb_kthreads(void)
 {
 	int cpu;
 	int ls = rcu_nocb_leader_stride;

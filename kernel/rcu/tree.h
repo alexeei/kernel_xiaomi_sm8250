@@ -446,11 +446,10 @@ static bool rcu_preempt_has_tasks(struct rcu_node *rnp);
 static void rcu_print_detail_task_stall(void);
 static int rcu_print_task_stall(struct rcu_node *rnp);
 static int rcu_print_task_exp_stall(struct rcu_node *rnp);
-static void rcu_preempt_check_blocked_tasks(struct rcu_state *rsp,
-					    struct rcu_node *rnp);
+static void rcu_preempt_check_blocked_tasks(struct rcu_node *rnp);
 static void rcu_flavor_check_callbacks(int user);
 void call_rcu(struct rcu_head *head, rcu_callback_t func);
-static void dump_blkd_tasks(struct rcu_state *rsp, struct rcu_node *rnp,
+static void dump_blkd_tasks(struct rcu_node *rnp,
 			    int ncheck);
 static void rcu_initiate_boost(struct rcu_node *rnp, unsigned long flags);
 static void rcu_preempt_boost_start_gp(struct rcu_node *rnp);
@@ -483,7 +482,7 @@ static void rcu_boot_init_nocb_percpu_data(struct rcu_data *rdp);
 static void rcu_spawn_all_nocb_kthreads(int cpu);
 static void __init rcu_spawn_nocb_kthreads(void);
 #ifdef CONFIG_RCU_NOCB_CPU
-static void __init rcu_organize_nocb_kthreads(struct rcu_state *rsp);
+static void __init rcu_organize_nocb_kthreads(void);
 #endif /* #ifdef CONFIG_RCU_NOCB_CPU */
 static bool init_nocb_callback_list(struct rcu_data *rdp);
 static void rcu_bind_gp_kthread(void);

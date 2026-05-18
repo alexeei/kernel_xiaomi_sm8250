@@ -1691,15 +1691,14 @@ static bool rcu_accelerate_cbs(struct rcu_node *rnp, struct rcu_data *rdp)
  * that a new grace-period request be made, invokes rcu_accelerate_cbs()
  * while holding the leaf rcu_node structure's ->lock.
  */
-static void rcu_accelerate_cbs_unlocked(struct rcu_state *rsp,
-					struct rcu_node *rnp,
+static void rcu_accelerate_cbs_unlocked(struct rcu_node *rnp,
 					struct rcu_data *rdp)
 {
 	unsigned long c;
 	bool needwake;
 
 	lockdep_assert_irqs_disabled();
-	c = rcu_seq_snap(&rsp->gp_seq);
+	c = rcu_seq_snap(&rcu_state.gp_seq);
 	if (!rdp->gpwrap && ULONG_CMP_GE(rdp->gp_seq_needed, c)) {
 		/* Old request still live, so mark recent callbacks. */
 		(void)rcu_segcblist_accelerate(&rdp->cblist, c);
@@ -1808,10 +1807,10 @@ static void note_gp_changes(struct rcu_data *rdp)
 		rcu_gp_kthread_wake();
 }
 
-static void rcu_gp_slow(struct rcu_state *rsp, int delay)
+static void rcu_gp_slow(int delay)
 {
 	if (delay > 0 &&
-	    !(rcu_seq_ctr(rsp->gp_seq) %
+	    !(rcu_seq_ctr(rcu_state.gp_seq) %
 	      (rcu_num_nodes * PER_RCU_NODE_PERIOD * delay)))
 		schedule_timeout_uninterruptible(delay);
 }
@@ -1904,7 +1903,7 @@ static bool rcu_gp_init(void)
 		raw_spin_unlock_irq_rcu_node(rnp);
 		spin_unlock(&rcu_state.ofl_lock);
 	}
-	rcu_gp_slow(rsp, gp_preinit_delay); /* Races with CPU hotplug. */
+	rcu_gp_slow(gp_preinit_delay); /* Races with CPU hotplug. */
 
 	/*
 	 * Set the quiescent-state-needed bits in all the rcu_node
@@ -1926,7 +1925,7 @@ static bool rcu_gp_init(void)
 
 		raw_spin_lock_irqsave_rcu_node(rnp, flags);
 		rdp = this_cpu_ptr(&rcu_data);
-		rcu_preempt_check_blocked_tasks(rsp, rnp);
+		rcu_preempt_check_blocked_tasks(rnp);
 		rnp->qsmask = rnp->qsmaskinit;
 		WRITE_ONCE(rnp->gp_seq, rcu_state.gp_seq);
 		if (rnp == rdp->mynode)
@@ -2101,7 +2100,7 @@ static void rcu_gp_cleanup(void)
 	rcu_for_each_node_breadth_first(rnp) {
 		raw_spin_lock_irq_rcu_node(rnp);
 		if (WARN_ON_ONCE(rcu_preempt_blocked_readers_cgp(rnp)))
-			dump_blkd_tasks(rsp, rnp, 10);
+			dump_blkd_tasks(rnp, 10);
 		WARN_ON_ONCE(rnp->qsmask);
 		WRITE_ONCE(rnp->gp_seq, new_gp_seq);
 		rdp = this_cpu_ptr(&rcu_data);
@@ -2323,7 +2322,7 @@ rcu_report_unblock_qs_rnp(struct rcu_node *rnp, unsigned long flags)
  * structure.  This must be called from the specified CPU.
  */
 static void
-rcu_report_qs_rdp(int cpu, struct rcu_state *rsp, struct rcu_data *rdp)
+rcu_report_qs_rdp(int cpu, struct rcu_data *rdp)
 {
 	unsigned long flags;
 	unsigned long mask;
@@ -2395,7 +2394,7 @@ rcu_check_quiescent_state(struct rcu_data *rdp)
 	 * Tell RCU we are done (but rcu_report_qs_rdp() will be the
 	 * judge of that).
 	 */
-	rcu_report_qs_rdp(rdp->cpu, rsp, rdp);
+	rcu_report_qs_rdp(rdp->cpu, rdp);
 }
 
 /*
@@ -2774,7 +2773,7 @@ static __latent_entropy void rcu_process_callbacks(struct softirq_action *unused
 	    rcu_segcblist_is_enabled(&rdp->cblist)) {
 		local_irq_save(flags);
 		if (!rcu_segcblist_restempty(&rdp->cblist, RCU_NEXT_READY_TAIL))
-			rcu_accelerate_cbs_unlocked(rsp, rnp, rdp);
+			rcu_accelerate_cbs_unlocked(rnp, rdp);
 		local_irq_restore(flags);
 	}
 
@@ -2845,7 +2844,7 @@ static void __call_rcu_core(struct rcu_data *rdp, struct rcu_head *head,
 
 		/* Start a new grace period if one not already started. */
 		if (!rcu_gp_in_progress()) {
-			rcu_accelerate_cbs_unlocked(rsp, rdp->mynode, rdp);
+			rcu_accelerate_cbs_unlocked(rdp->mynode, rdp);
 		} else {
 			/* Give the grace period a kick. */
 			rdp->blimit = LONG_MAX;
@@ -3241,7 +3240,7 @@ static void _rcu_barrier(void)
 			continue;
 		rdp = per_cpu_ptr(&rcu_data, cpu);
 		if (rcu_is_nocb_cpu(cpu)) {
-			if (!rcu_nocb_cpu_needs_barrier(rsp, cpu)) {
+			if (!rcu_nocb_cpu_needs_barrier(cpu)) {
 				_rcu_barrier_trace(TPS("OfflineNoCB"), cpu,
 						   rcu_state.barrier_sequence);
 			} else {
@@ -3338,7 +3337,7 @@ static void rcu_init_new_rnp(struct rcu_node *rnp_leaf)
  * Do boot-time initialization of a CPU's per-CPU RCU data.
  */
 static void __init
-rcu_boot_init_percpu_data(int cpu, struct rcu_state *rsp)
+rcu_boot_init_percpu_data(int cpu)
 {
 	struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
 
@@ -3347,22 +3346,21 @@ rcu_boot_init_percpu_data(int cpu, struct rcu_state *rsp)
 	rdp->dynticks = &per_cpu(rcu_dynticks, cpu);
 	WARN_ON_ONCE(rdp->dynticks->dynticks_nesting != 1);
 	WARN_ON_ONCE(rcu_dynticks_in_eqs(rcu_dynticks_snap(rdp->dynticks)));
-	rdp->rcu_ofl_gp_seq = rsp->gp_seq;
+	rdp->rcu_ofl_gp_seq = rcu_state.gp_seq;
 	rdp->rcu_ofl_gp_flags = RCU_GP_CLEANED;
-	rdp->rcu_onl_gp_seq = rsp->gp_seq;
+	rdp->rcu_onl_gp_seq =  rcu_state.gp_seq;
 	rdp->rcu_onl_gp_flags = RCU_GP_CLEANED;
 	rdp->cpu = cpu;
 	rcu_boot_init_nocb_percpu_data(rdp);
 }
 
+
+
 /*
- * Initialize a CPU's per-CPU RCU data.  Note that only one online or
- * offline event can be happening at a given time.  Note also that we can
- * accept some slop in the rsp->gp_seq access due to the fact that this
- * CPU cannot possibly have any RCU callbacks in flight yet.
+ * Invoked early in the CPU-online process, when pretty much all
+ * services are available.  The incoming CPU is not present.
  */
-static void
-rcu_init_percpu_data(int cpu, struct rcu_state *rsp)
+int rcutree_prepare_cpu(unsigned int cpu)
 {
 	unsigned long flags;
 	struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
@@ -3371,7 +3369,7 @@ rcu_init_percpu_data(int cpu, struct rcu_state *rsp)
 	/* Set up local state, ensuring consistent view of global state. */
 	raw_spin_lock_irqsave_rcu_node(rnp, flags);
 	rdp->qlen_last_fqs_check = 0;
-	rdp->n_force_qs_snap = rsp->n_force_qs;
+	rdp->n_force_qs_snap = rcu_state.n_force_qs;
 	rdp->blimit = blimit;
 	if (rcu_segcblist_empty(&rdp->cblist) && /* No early-boot CBs? */
 	    !init_nocb_callback_list(rdp))
@@ -3395,21 +3393,8 @@ rcu_init_percpu_data(int cpu, struct rcu_state *rsp)
 	rdp->core_needs_qs = false;
 	rdp->rcu_iw_pending = false;
 	rdp->rcu_iw_gp_seq = rnp->gp_seq - 1;
-	trace_rcu_grace_period(rsp->name, rdp->gp_seq, TPS("cpuonl"));
+	trace_rcu_grace_period(rcu_state.name, rdp->gp_seq, TPS("cpuonl"));
 	raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
-}
-
-/*
- * Invoked early in the CPU-online process, when pretty much all
- * services are available.  The incoming CPU is not present.
- */
-int rcutree_prepare_cpu(unsigned int cpu)
-{
-	struct rcu_state *rsp;
-
-	for_each_rcu_flavor(rsp)
-		rcu_init_percpu_data(cpu, rsp);
-
 	rcu_prepare_kthreads(cpu);
 	rcu_spawn_all_nocb_kthreads(cpu);
 
@@ -3524,17 +3509,19 @@ void rcu_cpu_starting(unsigned int cpu)
 
 #ifdef CONFIG_HOTPLUG_CPU
 /*
- * The CPU is exiting the idle loop into the arch_cpu_idle_dead()
- * function.  We now remove it from the rcu_node tree's ->qsmaskinitnext
- * bit masks.
+ * The outgoing function has no further need of RCU, so remove it from
+ * the rcu_node tree's ->qsmaskinitnext bit masks.
+ *
+ * Note that this function is special in that it is invoked directly
+ * from the outgoing CPU rather than from the cpuhp_step mechanism.
+ * This is because this function must be invoked at a precise location.
  */
-static void rcu_cleanup_dying_idle_cpu(int cpu, struct rcu_state *rsp)
+void rcu_report_dead(unsigned int cpu)
 {
 	unsigned long flags;
 	unsigned long mask;
 	struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
 	struct rcu_node *rnp = rdp->mynode;  /* Outgoing CPU's rdp & rnp. */
-
 
 	/* QS for any half-done expedited RCU-sched GP. */
 	preempt_disable();
@@ -3544,10 +3531,10 @@ static void rcu_cleanup_dying_idle_cpu(int cpu, struct rcu_state *rsp)
 
 	/* Remove outgoing CPU from mask in the leaf rcu_node structure. */
 	mask = rdp->grpmask;
-	spin_lock(&rsp->ofl_lock);
+	spin_lock(&rcu_state.ofl_lock);
 	raw_spin_lock_irqsave_rcu_node(rnp, flags); /* Enforce GP memory-order guarantee. */
-	rdp->rcu_ofl_gp_seq = READ_ONCE(rsp->gp_seq);
-	rdp->rcu_ofl_gp_flags = READ_ONCE(rsp->gp_flags);
+	rdp->rcu_ofl_gp_seq = READ_ONCE(rcu_state.gp_seq);
+	rdp->rcu_ofl_gp_flags = READ_ONCE(rcu_state.gp_flags);
 	if (rnp->qsmask & mask) { /* RCU waiting on outgoing CPU? */
 		/* Report quiescent state -before- changing ->qsmaskinitnext! */
 		rcu_report_qs_rnp(mask, rnp, rnp->gp_seq, flags);
@@ -3555,34 +3542,17 @@ static void rcu_cleanup_dying_idle_cpu(int cpu, struct rcu_state *rsp)
 	}
 	rnp->qsmaskinitnext &= ~mask;
 	raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
-	spin_unlock(&rsp->ofl_lock);
-}
-
-/*
- * The outgoing function has no further need of RCU, so remove it from
- * the list of CPUs that RCU must track.
- *
- * Note that this function is special in that it is invoked directly
- * from the outgoing CPU rather than from the cpuhp_step mechanism.
- * This is because this function must be invoked at a precise location.
- */
-void rcu_report_dead(unsigned int cpu)
-{
-	struct rcu_state *rsp;
-
-	/* QS for any half-done expedited RCU-sched GP. */
-	preempt_disable();
-	rcu_report_exp_rdp(&rcu_state, this_cpu_ptr(&rcu_data));
-	preempt_enable();
-	rcu_preempt_deferred_qs(current);
-	for_each_rcu_flavor(rsp)
-		rcu_cleanup_dying_idle_cpu(cpu, rsp);
+	spin_unlock(&rcu_state.ofl_lock);
 
 	per_cpu(rcu_cpu_started, cpu) = 0;
 }
 
-/* Migrate the dead CPU's callbacks to the current CPU. */
-static void rcu_migrate_callbacks(int cpu, struct rcu_state *rsp)
+/*
+ * The outgoing CPU has just passed through the dying-idle state, and we
+ * are being invoked from the CPU that was IPIed to continue the offline
+ * operation.  Migrate the outgoing CPU's callbacks to the current CPU.
+ */
+void rcutree_migrate_callbacks(int cpu)
 {
 	unsigned long flags;
 	struct rcu_data *my_rdp;
@@ -3614,19 +3584,6 @@ static void rcu_migrate_callbacks(int cpu, struct rcu_state *rsp)
 		  "rcu_cleanup_dead_cpu: Callbacks on offline CPU %d: qlen=%lu, 1stCB=%p\n",
 		  cpu, rcu_segcblist_n_cbs(&rdp->cblist),
 		  rcu_segcblist_first_cb(&rdp->cblist));
-}
-
-/*
- * The outgoing CPU has just passed through the dying-idle state,
- * and we are being invoked from the CPU that was IPIed to continue the
- * offline operation.  We need to migrate the outgoing CPU's callbacks.
- */
-void rcutree_migrate_callbacks(int cpu)
-{
-	struct rcu_state *rsp;
-
-	for_each_rcu_flavor(rsp)
-		rcu_migrate_callbacks(cpu, rsp);
 }
 #endif
 
@@ -3795,7 +3752,7 @@ static void __init rcu_init_one(void)
 		while (i > rnp->grphi)
 			rnp++;
 		per_cpu_ptr(&rcu_data, i)->mynode = rnp;
-		rcu_boot_init_percpu_data(i, rsp);
+		rcu_boot_init_percpu_data(i);
 	}
 }
 
