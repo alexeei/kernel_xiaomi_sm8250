@@ -146,7 +146,7 @@ static void init_srcu_struct_nodes(struct srcu_struct *sp, bool is_static)
 		sdp->cpu = cpu;
 		INIT_WORK(&sdp->work, srcu_invoke_callbacks);
 		timer_setup(&sdp->delay_work, srcu_delay_timer, 0);
-		sdp->ssp = ssp;
+		sdp->sp = sp;
 		sdp->grpmask = 1 << (cpu - sdp->mynode->grplo);
 		if (is_static)
 			continue;
@@ -376,7 +376,7 @@ void _cleanup_srcu_struct(struct srcu_struct *sp, bool quiesced)
 		flush_delayed_work(&sp->work);
 	}
 	for_each_possible_cpu(cpu) {
-		struct srcu_data *sdp = per_cpu_ptr(ssp->sda, cpu);
+		struct srcu_data *sdp = per_cpu_ptr(sp->sda, cpu);
 
 		if (quiesced) {
 
@@ -391,8 +391,8 @@ void _cleanup_srcu_struct(struct srcu_struct *sp, bool quiesced)
 		if (WARN_ON(rcu_segcblist_n_cbs(&sdp->srcu_cblist)))
 			return; /* Forgot srcu_barrier(), so just leak it! */
 	}
-	if (WARN_ON(rcu_seq_state(READ_ONCE(ssp->srcu_gp_seq)) != SRCU_STATE_IDLE) ||
-	    WARN_ON(srcu_readers_active(ssp))) {
+	if (WARN_ON(rcu_seq_state(READ_ONCE(sp->srcu_gp_seq)) != SRCU_STATE_IDLE) ||
+	    WARN_ON(srcu_readers_active(sp))) {
 		pr_info("%s: Active srcu_struct %p state: %d\n",
 			__func__, sp, rcu_seq_state(READ_ONCE(sp->srcu_gp_seq)));
 		return; /* Caller forgot to stop doing call_srcu()? */
@@ -1171,7 +1171,7 @@ static void srcu_invoke_callbacks(struct work_struct *work)
 
 	sdp = container_of(work, struct srcu_data, work);
 
-	ssp = sdp->ssp;
+	sp = sdp->sp;
 	rcu_cblist_init(&ready_cbs);
 	spin_lock_irq_rcu_node(sdp);
 	rcu_segcblist_advance(&sdp->srcu_cblist,
