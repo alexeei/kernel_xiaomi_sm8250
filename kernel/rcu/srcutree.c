@@ -367,7 +367,7 @@ static unsigned long srcu_get_delay(struct srcu_struct *sp)
  * Must invoke this after you are finished using a given srcu_struct that
  * was initialized via init_srcu_struct(), else you leak memory.
  */
-void cleanup_srcu_struct(struct srcu_struct *ssp)
+void cleanup_srcu_struct(struct srcu_struct *sp)
 {
 	int cpu;
 
