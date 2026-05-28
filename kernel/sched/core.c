@@ -1502,7 +1502,10 @@ static inline void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 	trace_sched_enq_deq_task(p, 1, cpumask_bits(&p->cpus_mask)[0]);
 }
 
-static inline void dequeue_task(struct rq *rq, struct task_struct *p, int flags)
+/*
+ * Must only return false when DEQUEUE_SLEEP.
+ */
+static inline bool dequeue_task(struct rq *rq, struct task_struct *p, int flags)
 {
 	if (!(flags & DEQUEUE_NOCLOCK))
 		update_rq_clock(rq);
@@ -1513,12 +1516,13 @@ static inline void dequeue_task(struct rq *rq, struct task_struct *p, int flags)
 	}
 
 	uclamp_rq_dec(rq, p);
-	p->sched_class->dequeue_task(rq, p, flags);
+	
 #ifdef CONFIG_SCHED_WALT
 	if (p == rq->ed_task)
 		early_detection_notify(rq, sched_ktime_clock());
 #endif
 	trace_sched_enq_deq_task(p, 0, cpumask_bits(&p->cpus_mask)[0]);
+    return p->sched_class->dequeue_task(rq, p, flags);
 }
 
 void activate_task(struct rq *rq, struct task_struct *p, int flags)
