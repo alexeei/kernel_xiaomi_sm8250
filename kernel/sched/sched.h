@@ -1815,6 +1815,7 @@ extern const u32		sched_prio_to_wmult[40];
 #define ENQUEUE_MOVE		0x04
 #define ENQUEUE_NOCLOCK		0x08
 #define DEQUEUE_IDLE		0x80 /* The last dequeue before IDLE */
+#define DEQUEUE_DELAYED		0x200 /* Matches ENQUEUE_DELAYED */
 #define ENQUEUE_HEAD		0x10
 #define ENQUEUE_REPLENISH	0x20
 #ifdef CONFIG_SMP
@@ -1822,9 +1823,11 @@ extern const u32		sched_prio_to_wmult[40];
 #else
 #define ENQUEUE_MIGRATED	0x00
 #endif
-#define ENQUEUE_INITIAL		0x80
+
 
 #define ENQUEUE_WAKEUP_SYNC	0x80
+#define ENQUEUE_INITIAL		0x100
+#define ENQUEUE_DELAYED		0x200
 
 #define RETRY_TASK		((void *)-1UL)
 
