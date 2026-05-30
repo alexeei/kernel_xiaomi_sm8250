@@ -1815,6 +1815,7 @@ extern const u32		sched_prio_to_wmult[40];
 #define ENQUEUE_MOVE		0x04
 #define ENQUEUE_NOCLOCK		0x08
 #define DEQUEUE_IDLE		0x80 /* The last dequeue before IDLE */
+#define DEQUEUE_SPECIAL		0x10
 #define DEQUEUE_DELAYED		0x200 /* Matches ENQUEUE_DELAYED */
 #define ENQUEUE_HEAD		0x10
 #define ENQUEUE_REPLENISH	0x20
