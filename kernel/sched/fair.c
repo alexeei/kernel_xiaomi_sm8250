@@ -4924,7 +4924,8 @@ static inline void check_schedstat_required(void)
 }
 
 static inline bool cfs_bandwidth_used(void);
-
+static void
+requeue_delayed_entity(struct sched_entity *se);
 
 static void
 enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
@@ -5512,8 +5513,10 @@ void unthrottle_cfs_rq(struct cfs_rq *cfs_rq)
 	task_delta = cfs_rq->h_nr_running;
 	idle_task_delta = cfs_rq->idle_h_nr_running;
 	for_each_sched_entity(se) {
-		if (se->on_rq)
-			break;
+		if (se->on_rq) {
+                        SCHED_WARN_ON(se->sched_delayed);
+                        break;
+                }
 
 		cfs_rq = cfs_rq_of(se);
 		enqueue_entity(cfs_rq, se, ENQUEUE_WAKEUP);
@@ -6193,6 +6196,22 @@ static int sched_idle_cpu(int cpu)
 	return sched_idle_rq(cpu_rq(cpu));
 }
 
+static void
+requeue_delayed_entity(struct sched_entity *se)
+{
+	struct cfs_rq *cfs_rq = cfs_rq_of(se);
+
+	/*
+	 * se->sched_delayed should imply: se->on_rq == 1.
+	 * Because a delayed entity is one that is still on
+	 * the runqueue competing until elegibility.
+	 */
+	SCHED_WARN_ON(!se->sched_delayed);
+	SCHED_WARN_ON(!se->on_rq);
+
+	se->sched_delayed = 0;
+}
+
 /*
  * The enqueue_task method is called before nr_running is
  * increased. Here we update the fair scheduling stats and
@@ -6211,6 +6230,11 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	if(p->group_leader && (!strncmp(p->group_leader->comm, "surfaceflinger", 14) ||
 			!strncmp(p->group_leader->comm, "ndroid.systemui", 15))){
 		p->prio = 30;
+	}
+
+    if (flags & ENQUEUE_DELAYED) {
+		requeue_delayed_entity(se);
+		return;
 	}
 
 	/*
@@ -6251,8 +6275,11 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		cpufreq_update_util(rq, SCHED_CPUFREQ_IOWAIT);
 
 	for_each_sched_entity(se) {
-		if (se->on_rq)
+		if (se->on_rq) {
+			if (se->sched_delayed)
+				requeue_delayed_entity(se);
 			break;
+        }
 		cfs_rq = cfs_rq_of(se);
 		enqueue_entity(cfs_rq, se, flags);
 
