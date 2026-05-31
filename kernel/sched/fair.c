@@ -6199,7 +6199,7 @@ static int sched_idle_cpu(int cpu)
 static void
 requeue_delayed_entity(struct sched_entity *se)
 {
-	struct cfs_rq *cfs_rq = cfs_rq_of(se);
+	
 
 	/*
 	 * se->sched_delayed should imply: se->on_rq == 1.
