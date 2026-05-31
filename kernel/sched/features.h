@@ -20,6 +20,12 @@
  */
 #define SCHED_FEAT_PLACE_REL_DEADLINE 1
 
+
+/*
+ * Allow wakeup of tasks with a shorter slice to cancel RESPECT_SLICE for
+ * current.
+ */
+#define SCHED_FEAT_PREEMPT_SHORT 1
 /*
  * Consider buddies to be cache hot, decreases the likelyness of a
  * cache buddy being migrated away, increases cache locality.
