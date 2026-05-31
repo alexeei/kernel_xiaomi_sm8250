@@ -31,6 +31,16 @@
 #define SCHED_FEAT_LB_BIAS 1
 
 /*
+ * Delay dequeueing tasks until they get selected or woken.
+ *
+ * By delaying the dequeue for non-eligible tasks, they remain in the
+ * competition and can burn off their negative lag. When they get selected
+ * they'll have positive lag by definition.
+ */
+#define SCHED_FEAT_DELAY_DEQUEUE 1
+
+
+/*
  * Decrement CPU capacity based on time not spent running tasks
  */
 
