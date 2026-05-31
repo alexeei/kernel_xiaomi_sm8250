@@ -16,6 +16,11 @@
 #define SCHED_FEAT_NEXT_BUDDY 0
 
 /*
+ * Preserve relative virtual deadline on 'migration'.
+ */
+#define SCHED_FEAT_PLACE_REL_DEADLINE 1
+
+/*
  * Consider buddies to be cache hot, decreases the likelyness of a
  * cache buddy being migrated away, increases cache locality.
  */
