@@ -2980,5 +2980,7 @@ static inline void setup_nr_node_ids(void) {}
 
 extern int want_old_faultaround_pte;
 
+static inline void vm_write_begin(struct vm_area_struct *vma) {}
+
 #endif /* __KERNEL__ */
 #endif /* _LINUX_MM_H */
