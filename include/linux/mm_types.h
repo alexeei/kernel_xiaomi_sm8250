@@ -275,8 +275,7 @@ struct vm_area_struct {
 	unsigned long vm_end;		/* The first byte after our end address
 					   within vm_mm. */
 
-	/* linked list of VM areas per task, sorted by address */
-	struct vm_area_struct *vm_next, *vm_prev;
+	
 
 	struct rb_node vm_rb;
 
@@ -310,13 +309,18 @@ struct vm_area_struct {
 		const char __user *anon_name;
 	};
 
+    /* Second cache line starts here (approx offset 64 on 64-bit) */
+
+	/* linked list of VM areas per task, sorted by address */
+	struct vm_area_struct *vm_next, *vm_prev;
+
 	/*
 	 * A file's MAP_PRIVATE vma can be in both i_mmap tree and anon_vma
 	 * list, after a COW of one of the file pages.	A MAP_SHARED vma
 	 * can only be in the i_mmap tree.  An anonymous MAP_PRIVATE, stack
 	 * or brk vma (with NULL file) can only be in an anon_vma list.
 	 */
-	struct list_head anon_vma_chain; /* Serialized by mmap_sem &
+	struct list_head anon_vma_chain; /* Serialized by mmap_lock &
 					  * page_table_lock */
 	struct anon_vma *anon_vma;	/* Serialized by page_table_lock */
 
@@ -405,7 +409,14 @@ struct mm_struct {
 		spinlock_t page_table_lock; /* Protects page tables and some
 					     * counters
 					     */
-		struct rw_semaphore mmap_sem;
+		/*
+		 * Anonymous union to support both modern "mmap_lock" API
+		 * and legacy drivers expecting "mmap_sem".
+		 */
+		union {
+			struct rw_semaphore mmap_lock;
+			struct rw_semaphore mmap_sem;
+		};
 
 		struct list_head mmlist; /* List of maybe swapped mm's.	These
 					  * are globally strung together off
