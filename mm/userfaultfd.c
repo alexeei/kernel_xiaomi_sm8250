@@ -661,7 +661,7 @@ retry:
 			 * threads don't keep retrying for progress-critical
 			 * pages.
 			 */
-			if (copied && rwsem_is_contended(&dst_mm->mmap_sem))
+			if (copied &&  mmap_lock_is_contended(dst_mm))
 				break;
 
 			mmap_read_unlock(dst_mm);
@@ -689,7 +689,7 @@ retry:
 			if (fatal_signal_pending(current))
 				err = -EINTR;
 
-			if (rwsem_is_contended(&dst_mm->mmap_sem))
+			if (mmap_lock_is_contended(dst_mm))
 				err = -EAGAIN;
 		}
 		if (err)
