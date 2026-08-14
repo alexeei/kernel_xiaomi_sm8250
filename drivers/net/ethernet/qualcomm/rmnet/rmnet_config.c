@@ -260,6 +260,7 @@ static void rmnet_dellink(struct net_device *dev, struct list_head *head)
 		rmnet_vnd_dellink(mux_id, port, ep);
 		synchronize_rcu();
 		kfree(ep);
+
 	}
 
 	if (!port->nr_rmnet_devs)
@@ -298,6 +299,7 @@ static void rmnet_force_unassociate_device(struct net_device *dev)
 
 		hlist_del_init_rcu(&ep->hlnode);
 		hlist_add_head(&ep->hlnode, &cleanup_list);
+
 	}
 
 	synchronize_rcu();
