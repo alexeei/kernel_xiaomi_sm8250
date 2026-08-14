@@ -1520,6 +1520,7 @@ struct task_struct {
 	ANDROID_KABI_USE(1, unsigned frozen:1);
 #ifdef CONFIG_ANDROID_SIMPLE_LMK
 	struct task_struct		*simple_lmk_next;
+    unsigned long simple_lmk_cache_time;
 #endif
 
 	/* 095444fad7e3 ("futex: Replace PF_EXITPIDONE with a state") */

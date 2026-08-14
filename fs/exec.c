@@ -1740,28 +1740,7 @@ static int exec_binprm(struct linux_binprm *bprm)
 	return ret;
 }
 
-#ifdef CONFIG_ANDROID_SIMPLE_LMK
-static noinline bool is_lmkd_reinit(struct user_arg_ptr *argv)
-{
-	const char __user *str;
-	char buf[10];
-	int len;
 
-	str = get_user_arg_ptr(*argv, 1);
-	if (IS_ERR(str))
-		return false;
-
-	// strnlen_user() counts NULL terminator
-	len = strnlen_user(str, MAX_ARG_STRLEN);
-	if (len != 9)
-		return false;
-
-	if (copy_from_user(buf, str, len))
-		return false;
-
-	return !strcmp(buf, "--reinit");
-}
-#endif
 
 /*
  * sys_execve() executes a new program.
