@@ -242,11 +242,15 @@ static bool remove_migration_pte(struct page *page, struct vm_area_struct *vma,
 		entry = pte_to_swp_entry(*pvmw.pte);
 		if (is_write_migration_entry(entry))
 			pte = maybe_mkwrite(pte, vma);
+		else if (pte_swp_uffd_wp(*pvmw.pte))
+			pte = pte_mkuffd_wp(pte);
 
 		if (unlikely(is_zone_device_page(new))) {
 			if (is_device_private_page(new)) {
 				entry = make_device_private_entry(new, pte_write(pte));
 				pte = swp_entry_to_pte(entry);
+				if (pte_swp_uffd_wp(*pvmw.pte))
+					pte = pte_swp_mkuffd_wp(pte);
 			} else if (is_device_public_page(new)) {
 				pte = pte_mkdevmap(pte);
 			}
@@ -727,7 +731,7 @@ void migrate_page_copy(struct page *newpage, struct page *page)
 EXPORT_SYMBOL(migrate_page_copy);
 
 /************************************************************
- *                    Migration functions
+ *                   Migration functions
  ***********************************************************/
 
 /*
@@ -1802,8 +1806,8 @@ static int kernel_move_pages(pid_t pid, unsigned long nr_pages,
 	}
 	rcu_read_unlock();
 
- 	err = security_task_movememory(task);
- 	if (err)
+	err = security_task_movememory(task);
+	if (err)
 		goto out;
 
 	task_nodes = cpuset_mems_allowed(task);
@@ -2321,8 +2325,17 @@ again:
 			entry = make_migration_entry(page, mpfn &
 						     MIGRATE_PFN_WRITE);
 			swp_pte = swp_entry_to_pte(entry);
-			if (pte_soft_dirty(pte))
-				swp_pte = pte_swp_mksoft_dirty(swp_pte);
+			if (pte_present(pte)) {
+				if (pte_soft_dirty(pte))
+					swp_pte = pte_swp_mksoft_dirty(swp_pte);
+				if (pte_uffd_wp(pte))
+					swp_pte = pte_swp_mkuffd_wp(swp_pte);
+			} else {
+				if (pte_swp_soft_dirty(pte))
+					swp_pte = pte_swp_mksoft_dirty(swp_pte);
+				if (pte_swp_uffd_wp(pte))
+					swp_pte = pte_swp_mkuffd_wp(swp_pte);
+			}
 			set_pte_at(mm, addr, ptep, swp_pte);
 
 			/*

@@ -29,7 +29,7 @@
 int mfill_atomic_install_pte(struct mm_struct *dst_mm, pmd_t *dst_pmd,
 			     struct vm_area_struct *dst_vma,
 			     unsigned long dst_addr, struct page *page,
-			     bool newly_allocated)
+			     bool newly_allocated, bool wp_copy)
 {
 	int ret;
 	pte_t _dst_pte, *dst_pte;
@@ -45,8 +45,12 @@ int mfill_atomic_install_pte(struct mm_struct *dst_mm, pmd_t *dst_pmd,
 		writable = false;
 	if (writable || !page_in_cache)
 		_dst_pte = pte_mkdirty(_dst_pte);
-	if (writable)
-		_dst_pte = pte_mkwrite(_dst_pte);
+	if (writable) {
+		if (wp_copy)
+			_dst_pte = pte_mkuffd_wp(_dst_pte);
+		else
+			_dst_pte = pte_mkwrite(_dst_pte);
+	}
 
 	dst_pte = pte_offset_map_lock(dst_mm, dst_pmd, dst_addr, &ptl);
 
@@ -93,7 +97,7 @@ static int mcopy_atomic_pte(struct mm_struct *dst_mm,
 			    struct vm_area_struct *dst_vma,
 			    unsigned long dst_addr,
 			    unsigned long src_addr,
-			    struct page **pagep)
+			    struct page **pagep, bool wp_copy)
 {
 	struct mem_cgroup *memcg;
 	void *page_kaddr;
@@ -138,7 +142,7 @@ static int mcopy_atomic_pte(struct mm_struct *dst_mm,
 		goto out_release;
 
 	ret = mfill_atomic_install_pte(dst_mm, dst_pmd, dst_vma, dst_addr,
-				       page, true);
+				       page, true, wp_copy);
 	if (ret) {
 		mem_cgroup_cancel_charge(page, memcg, false);
 		goto out_release;
@@ -206,7 +210,7 @@ static int mcontinue_atomic_pte(struct mm_struct *dst_mm,
 	}
 
 	ret = mfill_atomic_install_pte(dst_mm, dst_pmd, dst_vma, dst_addr,
-				       page, false);
+				       page, false, false);
 	if (ret)
 		goto out_release;
 
@@ -243,16 +247,16 @@ static pmd_t *mm_alloc_pmd(struct mm_struct *mm, unsigned long address)
 
 #ifdef CONFIG_HUGETLB_PAGE
 /*
- * __mcopy_atomic processing for HUGETLB vmas.  Note that this routine is
+ * __mcopy_atomic processing for HUGETLB vmas. Note that this routine is
  * called with mmap_sem held, it will release mmap_sem before returning.
  */
 static __always_inline ssize_t __mcopy_atomic_hugetlb(struct mm_struct *dst_mm,
-					      struct vm_area_struct *dst_vma,
-					      unsigned long dst_start,
-					      unsigned long src_start,
-					      unsigned long len,
-					      bool *mmap_changing,
-					      enum mcopy_atomic_mode mode)
+						      struct vm_area_struct *dst_vma,
+						      unsigned long dst_start,
+						      unsigned long src_start,
+						      unsigned long len,
+						      bool *mmap_changing,
+						      enum mcopy_atomic_mode mode)
 {
 	int vm_alloc_shared = dst_vma->vm_flags & VM_SHARED;
 	int vm_shared = dst_vma->vm_flags & VM_SHARED;
@@ -269,8 +273,8 @@ static __always_inline ssize_t __mcopy_atomic_hugetlb(struct mm_struct *dst_mm,
 
 	/*
 	 * There is no default zero huge page for all huge page sizes as
-	 * supported by hugetlb.  A PMD_SIZE huge pages may exist as used
-	 * by THP.  Since we can not reliably insert a zero page, this
+	 * supported by hugetlb. A PMD_SIZE huge pages may exist as used
+	 * by THP. Since we can not reliably insert a zero page, this
 	 * feature is not supported.
 	 */
 	if (mode == MCOPY_ATOMIC_ZEROPAGE) {
@@ -293,7 +297,7 @@ static __always_inline ssize_t __mcopy_atomic_hugetlb(struct mm_struct *dst_mm,
 
 retry:
 	/*
-	 * On routine entry dst_vma is set.  If we had to drop mmap_sem and
+	 * On routine entry dst_vma is set. If we had to drop mmap_sem and
 	 * retry, dst_vma will be set to NULL and we must lookup again.
 	 */
 	if (!dst_vma) {
@@ -412,47 +416,6 @@ out_unlock:
 	mmap_read_unlock(dst_mm);
 out:
 	if (page) {
-		/*
-		 * We encountered an error and are about to free a newly
-		 * allocated huge page.
-		 *
-		 * Reservation handling is very subtle, and is different for
-		 * private and shared mappings.  See the routine
-		 * restore_reserve_on_error for details.  Unfortunately, we
-		 * can not call restore_reserve_on_error now as it would
-		 * require holding mmap_sem.
-		 *
-		 * If a reservation for the page existed in the reservation
-		 * map of a private mapping, the map was modified to indicate
-		 * the reservation was consumed when the page was allocated.
-		 * We clear the PagePrivate flag now so that the global
-		 * reserve count will not be incremented in free_huge_page.
-		 * The reservation map will still indicate the reservation
-		 * was consumed and possibly prevent later page allocation.
-		 * This is better than leaking a global reservation.  If no
-		 * reservation existed, it is still safe to clear PagePrivate
-		 * as no adjustments to reservation counts were made during
-		 * allocation.
-		 *
-		 * The reservation map for shared mappings indicates which
-		 * pages have reservations.  When a huge page is allocated
-		 * for an address with a reservation, no change is made to
-		 * the reserve map.  In this case PagePrivate will be set
-		 * to indicate that the global reservation count should be
-		 * incremented when the page is freed.  This is the desired
-		 * behavior.  However, when a huge page is allocated for an
-		 * address without a reservation a reservation entry is added
-		 * to the reservation map, and PagePrivate will not be set.
-		 * When the page is freed, the global reserve count will NOT
-		 * be incremented and it will appear as though we have leaked
-		 * reserved page.  In this case, set PagePrivate so that the
-		 * global reserve count will be incremented to match the
-		 * reservation map entry which was created.
-		 *
-		 * Note that vm_alloc_shared is based on the flags of the vma
-		 * for which the page was originally allocated.  dst_vma could
-		 * be different or NULL on error.
-		 */
 		if (vm_alloc_shared)
 			SetPagePrivate(page);
 		else
@@ -465,7 +428,6 @@ out:
 	return copied ? copied : err;
 }
 #else /* !CONFIG_HUGETLB_PAGE */
-/* fail at build time if gcc attempts to use this */
 extern ssize_t __mcopy_atomic_hugetlb(struct mm_struct *dst_mm,
 				      struct vm_area_struct *dst_vma,
 				      unsigned long dst_start,
@@ -481,31 +443,24 @@ static __always_inline ssize_t mfill_atomic_pte(struct mm_struct *dst_mm,
 						unsigned long dst_addr,
 						unsigned long src_addr,
 						struct page **page,
-						enum mcopy_atomic_mode mode)
+						enum mcopy_atomic_mode mode,
+						bool wp_copy)
 {
 	ssize_t err;
 
 	if (mode == MCOPY_ATOMIC_CONTINUE)
 		return mcontinue_atomic_pte(dst_mm, dst_pmd, dst_vma, dst_addr);
 
-	/*
-	 * The normal page fault path for a shmem will invoke the
-	 * fault, fill the hole in the file and COW it right away. The
-	 * result generates plain anonymous memory. So when we are
-	 * asked to fill an hole in a MAP_PRIVATE shmem mapping, we'll
-	 * generate anonymous memory directly without actually filling
-	 * the hole. For the MAP_PRIVATE case the robustness check
-	 * only happens in the pagetable (to verify it's still none)
-	 * and not in the radix tree.
-	 */
 	if (!(dst_vma->vm_flags & VM_SHARED)) {
 		if (mode == MCOPY_ATOMIC_NORMAL)
 			err = mcopy_atomic_pte(dst_mm, dst_pmd, dst_vma,
-					       dst_addr, src_addr, page);
+					       dst_addr, src_addr, page,
+					       wp_copy);
 		else
 			err = mfill_zeropage_pte(dst_mm, dst_pmd,
 						 dst_vma, dst_addr);
 	} else {
+		VM_WARN_ON_ONCE(wp_copy);
 		err = shmem_mfill_atomic_pte(dst_mm, dst_pmd, dst_vma,
 					     dst_addr, src_addr,
 					     mode != MCOPY_ATOMIC_NORMAL,
@@ -520,7 +475,7 @@ static __always_inline ssize_t __mcopy_atomic(struct mm_struct *dst_mm,
 					      unsigned long src_start,
 					      unsigned long len,
 					      enum mcopy_atomic_mode mcopy_mode,
-					       bool *mmap_changing,
+					      bool *mmap_changing,
 					      __u64 mode)
 {
 	struct vm_area_struct *dst_vma;
@@ -529,6 +484,7 @@ static __always_inline ssize_t __mcopy_atomic(struct mm_struct *dst_mm,
 	unsigned long src_addr, dst_addr;
 	long copied;
 	struct page *page;
+	bool wp_copy;
 
 	/*
 	 * Sanitize the command parameters:
@@ -553,28 +509,14 @@ retry:
 		mmap_read_lock(dst_mm);
 	}
 
-	/*
-	 * If memory mappings are changing because of non-cooperative
-	 * operation (e.g. mremap) running in parallel, bail out and
-	 * request the user to retry later
-	 */
-	
 	if (mmap_changing && READ_ONCE(*mmap_changing))
 		goto out_unlock;
 
-	/*
-	 * Make sure the vma is not shared, that the dst range is
-	 * both valid and fully within a single existing vma.
-	 */
 	err = -ENOENT;
 	dst_vma = find_vma(dst_mm, dst_start);
 	if (!dst_vma)
 		goto out_unlock;
-	/*
-	 * Check the vma is registered in uffd, this is required to
-	 * enforce the VM_MAYWRITE check done at uffd registration
-	 * time.
-	 */
+
 	if (!dst_vma->vm_userfaultfd_ctx.ctx)
 		goto out_unlock;
 
@@ -583,32 +525,24 @@ retry:
 		goto out_unlock;
 
 	err = -EINVAL;
-	/*
-	 * shmem_zero_setup is invoked in mmap for MAP_ANONYMOUS|MAP_SHARED but
-	 * it will overwrite vm_ops, so vma_is_anonymous must return false.
-	 */
 	if (WARN_ON_ONCE(vma_is_anonymous(dst_vma) &&
 	    dst_vma->vm_flags & VM_SHARED))
 		goto out_unlock;
 
-	/*
-	 * If this is a HUGETLB vma, pass off to appropriate routine
-	 */
+	wp_copy = mode & UFFDIO_COPY_MODE_WP;
+	if (wp_copy && !(dst_vma->vm_flags & VM_UFFD_WP))
+		goto out_unlock;
+
 	if (is_vm_hugetlb_page(dst_vma))
-		return  __mcopy_atomic_hugetlb(dst_mm, dst_vma, dst_start,
-					       src_start, len, mmap_changing,
-					       mcopy_mode);
+		return __mcopy_atomic_hugetlb(dst_mm, dst_vma, dst_start,
+					      src_start, len, mmap_changing,
+					      mcopy_mode);
 
 	if (!vma_is_anonymous(dst_vma) && !vma_is_shmem(dst_vma))
 		goto out_unlock;
 	if (!vma_is_shmem(dst_vma) && mcopy_mode == MCOPY_ATOMIC_CONTINUE)
 		goto out_unlock;
 
-	/*
-	 * Ensure the dst_vma has a anon_vma or this page
-	 * would get a NULL anon_vma when moved in the
-	 * dst_vma.
-	 */
 	err = -ENOMEM;
 	if (!(dst_vma->vm_flags & VM_SHARED) &&
 	    unlikely(anon_vma_prepare(dst_vma)))
@@ -626,10 +560,6 @@ retry:
 		}
 
 		dst_pmdval = pmd_read_atomic(dst_pmd);
-		/*
-		 * If the dst_pmd is mapped as THP don't
-		 * override it and just be strict.
-		 */
 		if (unlikely(pmd_trans_huge(dst_pmdval))) {
 			err = -EEXIST;
 			break;
@@ -639,7 +569,6 @@ retry:
 			err = -ENOMEM;
 			break;
 		}
-		/* If an huge pmd materialized from under us fail */
 		if (unlikely(pmd_trans_huge(*dst_pmd))) {
 			err = -EFAULT;
 			break;
@@ -649,19 +578,13 @@ retry:
 		BUG_ON(pmd_trans_huge(*dst_pmd));
 
 		err = mfill_atomic_pte(dst_mm, dst_pmd, dst_vma, dst_addr,
-				       src_addr, &page, mcopy_mode);
+				       src_addr, &page, mcopy_mode, wp_copy);
 		cond_resched();
 
 		if (unlikely(err == -ENOENT)) {
 			void *page_kaddr;
 
-			/*
-			 * Return early due to mmap_lock contention only after
-			 * some pages are copied to ensure that jank sensitive
-			 * threads don't keep retrying for progress-critical
-			 * pages.
-			 */
-			if (copied &&  mmap_lock_is_contended(dst_mm))
+			if (copied && mmap_lock_is_contended(dst_mm))
 				break;
 
 			mmap_read_unlock(dst_mm);
@@ -709,14 +632,14 @@ out:
 
 ssize_t mcopy_atomic(struct mm_struct *dst_mm, unsigned long dst_start,
 		     unsigned long src_start, unsigned long len,
-		      bool *mmap_changing, __u64 mode)
+		     bool *mmap_changing, __u64 mode)
 {
 	return __mcopy_atomic(dst_mm, dst_start, src_start, len,
 			      MCOPY_ATOMIC_NORMAL, mmap_changing, mode);
 }
 
 ssize_t mfill_zeropage(struct mm_struct *dst_mm, unsigned long start,
-		        unsigned long len, bool *mmap_changing, __u64 mode)
+		       unsigned long len, bool *mmap_changing, __u64 mode)
 {
 	return __mcopy_atomic(dst_mm, start, 0, len, MCOPY_ATOMIC_ZEROPAGE,
 			      mmap_changing, mode);
@@ -959,3 +882,61 @@ out_unlock:
 	return moved ? moved : err;
 }
 
+int mwriteprotect_range(struct mm_struct *dst_mm, unsigned long start,
+			unsigned long len, bool enable_wp, bool *mmap_changing)
+{
+	struct vm_area_struct *dst_vma;
+	pgprot_t newprot;
+	int err;
+
+	/*
+	 * Sanitize the command parameters:
+	 */
+	BUG_ON(start & ~PAGE_MASK);
+	BUG_ON(len & ~PAGE_MASK);
+
+	/* Does the address range wrap, or is the span zero-sized? */
+	BUG_ON(start + len <= start);
+
+	mmap_read_lock(dst_mm);
+
+	/*
+	 * If memory mappings are changing because of non-cooperative
+	 * operation (e.g. mremap) running in parallel, bail out and
+	 * request the user to retry later
+	 */
+	err = -EAGAIN;
+	if (mmap_changing && READ_ONCE(*mmap_changing))
+		goto out_unlock;
+
+	err = -ENOENT;
+	dst_vma = find_vma(dst_mm, start);
+	if (!dst_vma)
+		goto out_unlock;
+	if (start < dst_vma->vm_start || start + len > dst_vma->vm_end)
+		goto out_unlock;
+
+	/*
+	 * Make sure the vma is not shared, and that it's registered
+	 * for WP with anonymous memory.
+	 */
+	if (dst_vma->vm_flags & VM_SHARED)
+		goto out_unlock;
+	if (!userfaultfd_wp(dst_vma))
+		goto out_unlock;
+	if (!vma_is_anonymous(dst_vma))
+		goto out_unlock;
+
+	if (enable_wp)
+		newprot = vm_get_page_prot(dst_vma->vm_flags & ~(VM_WRITE));
+	else
+		newprot = vm_get_page_prot(dst_vma->vm_flags);
+
+	change_protection(dst_vma, start, start + len, newprot,
+			  enable_wp ? MM_CP_UFFD_WP : MM_CP_UFFD_WP_RESOLVE);
+
+	err = 0;
+out_unlock:
+	mmap_read_unlock(dst_mm);
+	return err;
+}

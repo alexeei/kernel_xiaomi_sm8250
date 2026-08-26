@@ -22,7 +22,8 @@
 #define UFFD_API_REGISTER_MODES (UFFDIO_REGISTER_MODE_MISSING |	\
 				 UFFDIO_REGISTER_MODE_WP |	\
 				 UFFDIO_REGISTER_MODE_MINOR)
-#define UFFD_API_FEATURES (UFFD_FEATURE_EVENT_FORK |		\
+#define UFFD_API_FEATURES (UFFD_FEATURE_PAGEFAULT_FLAG_WP |	\
+			   UFFD_FEATURE_EVENT_FORK |		\
 			   UFFD_FEATURE_EVENT_REMAP |		\
 			   UFFD_FEATURE_EVENT_REMOVE |		\
 			   UFFD_FEATURE_EVENT_UNMAP |		\
@@ -42,6 +43,7 @@
 	 (__u64)1 << _UFFDIO_COPY |		\
 	 (__u64)1 << _UFFDIO_ZEROPAGE |		\
      (__u64)1 << _UFFDIO_MOVE |		\
+	 (__u64)1 << _UFFDIO_WRITEPROTECT |	\
 	 (__u64)1 << _UFFDIO_CONTINUE)
 #define UFFD_API_RANGE_IOCTLS_BASIC		\
 	((__u64)1 << _UFFDIO_WAKE |		\
@@ -62,6 +64,7 @@
 #define _UFFDIO_COPY			(0x03)
 #define _UFFDIO_ZEROPAGE		(0x04)
 #define _UFFDIO_MOVE			(0x05)
+#define _UFFDIO_WRITEPROTECT		(0x06)
 #define _UFFDIO_CONTINUE		(0x07)
 #define _UFFDIO_API			(0x3F)
 
@@ -81,6 +84,8 @@
 				      struct uffdio_zeropage)
 #define UFFDIO_MOVE		_IOWR(UFFDIO, _UFFDIO_MOVE,	\
 				      struct uffdio_move)
+#define UFFDIO_WRITEPROTECT	_IOWR(UFFDIO, _UFFDIO_WRITEPROTECT, \
+				      struct uffdio_writeprotect)
 #define UFFDIO_CONTINUE		_IOWR(UFFDIO, _UFFDIO_CONTINUE,	\
 				      struct uffdio_continue)
 
@@ -238,6 +243,7 @@ struct uffdio_copy {
 	 */
 #define UFFDIO_COPY_MODE_DONTWAKE		((__u64)1<<0)
 #define UFFDIO_COPY_MODE_MMAP_TRYLOCK		((__u64)1<<63)
+#define UFFDIO_COPY_MODE_WP			((__u64)1<<1)
 	__u64 mode;
 
 	/*
@@ -303,5 +309,25 @@ struct uffdio_move {
  * Create a userfaultfd that can handle page faults only in user mode.
  */
 #define UFFD_USER_MODE_ONLY 1
+
+struct uffdio_writeprotect {
+	struct uffdio_range range;
+	/*
+	 * UFFDIO_WRITEPROTECT_MODE_WP: set the flag to write protect a range,
+	 * unset the flag to undo protection of a range which was previously
+	 * write protected.
+	 *
+	 * UFFDIO_WRITEPROTECT_MODE_DONTWAKE: set the flag to avoid waking up
+	 * any wait thread after the operation succeeds.
+	 *
+	 * NOTE: Write protecting a region (WP=1) is unrelated to page faults,
+	 * therefore DONTWAKE flag is meaningless with WP=1.  Removing write
+	 * protection (WP=0) in response to a page fault wakes the faulting
+	 * task unless DONTWAKE is set.
+	 */
+#define UFFDIO_WRITEPROTECT_MODE_WP		((__u64)1<<0)
+#define UFFDIO_WRITEPROTECT_MODE_DONTWAKE	((__u64)1<<1)
+	__u64 mode;
+};
 
 #endif /* _LINUX_USERFAULTFD_H */
