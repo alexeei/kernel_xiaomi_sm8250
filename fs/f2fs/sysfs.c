@@ -1081,6 +1081,9 @@ static struct attribute *f2fs_feat_attrs[] = {
 	ATTR_LIST(compression),
 #endif
 	ATTR_LIST(pin_file),
+#ifdef CONFIG_UNICODE
+	ATTR_LIST(linear_lookup),
+#endif
 	NULL,
 };
 
